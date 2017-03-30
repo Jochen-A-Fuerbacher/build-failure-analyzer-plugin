@@ -31,10 +31,10 @@
     <f:entry title="${%Database name}">
         <f:textbox name="dbName" value="${instance.dbName}"/>
     </f:entry>
-    <f:entry title="${%Username}" description="${%SqlDBKnowledgeBase_UserNameDesc}">
+    <f:entry title="${%Username}" description="${%MySqlKnowledgeBase_UserNameDesc}">
         <f:textbox name="userName" value="${instance.userName}"/>
     </f:entry>
-    <f:entry title="${%Password}" description="${%SqlDBKnowledgeBase_PasswordDesc}">
+    <f:entry title="${%Password}" description="${%MySqlKnowledgeBase_PasswordDesc}">
         <f:password name="password" value="${instance.password}"/>
     </f:entry>
     <f:entry title="${%Enable statistics logging}">
