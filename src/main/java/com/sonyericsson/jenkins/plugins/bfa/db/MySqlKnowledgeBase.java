@@ -23,6 +23,9 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.db;
 
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
@@ -51,7 +54,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	private static final Logger logger = Logger
 			.getLogger(MySqlKnowledgeBase.class.getName());
 
-	private static final SessionFactory factory;
+	private static SessionFactory factory;
 
 	private static final int MYSQL_DEFAULT_PORT = 3306;
 
@@ -328,6 +331,51 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 							.error("Database name contains white space!");
 				}
 				return FormValidation.ok();
+			}
+		}
+		/**
+		 * Tests if the provided parameters can connect to the Mongo database.
+		 * 
+		 * @param host
+		 *            the host name.
+		 * @param port
+		 *            the port.
+		 * @param dbName
+		 *            the database name.
+		 * @param userName
+		 *            the user name.
+		 * @param password
+		 *            the password.
+		 * @return {@link FormValidation#ok() } if can be done,
+		 *         {@link FormValidation#error(java.lang.String) } otherwise.
+		 * @throws ClassNotFoundException
+		 */
+		public FormValidation doTestConnection(
+				@QueryParameter("host") final String host,
+				@QueryParameter("port") final int port,
+				@QueryParameter("dbName") final String dbName,
+				@QueryParameter("userName") final String userName,
+				@QueryParameter("password") final String password) {
+
+			try {
+				Class.forName("com.mysql.jdbc.Driver");
+			} catch (ClassNotFoundException e) {
+				return FormValidation.error(e,
+						Messages.MySqlKnowledgeBase_ConnectionError());
+			}
+
+			try {
+				final String connection = "jdbc:mysql://" + host + ":" + port
+						+ "/" + dbName;
+				Connection conn = null;
+				conn = DriverManager.getConnection(connection, userName,
+						password);
+				conn.close();
+				return FormValidation
+						.ok(Messages.MySqlKnowledgeBase_ConnectionOK());
+			} catch (SQLException e) {
+				return FormValidation.error(e,
+						Messages.MySqlKnowledgeBase_ConnectionError());
 			}
 		}
 	}
