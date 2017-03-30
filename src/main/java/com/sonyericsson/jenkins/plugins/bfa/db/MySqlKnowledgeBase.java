@@ -50,6 +50,8 @@ import hudson.util.Secret;
 import jenkins.model.Jenkins;
 
 public class MySqlKnowledgeBase extends KnowledgeBase {
+	
+	private static final String MYSQL_DRIVER = "com.mysql.jdbc.Driver";
 
 	private static final Logger logger = Logger
 			.getLogger(MySqlKnowledgeBase.class.getName());
@@ -223,6 +225,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	public void start() throws Exception {
 		try {
 			Properties prop = new Properties();
+			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
 			prop.setProperty("hibernate.connection.url", this.host);
 			prop.setProperty("hibernate.connection.username", this.userName);
 			prop.setProperty("hibernate.connection.password",
@@ -359,7 +362,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				@QueryParameter("password") final String password) {
 
 			try {
-				Class.forName("com.mysql.jdbc.Driver");
+				Class.forName(MYSQL_DRIVER);
 			} catch (ClassNotFoundException e) {
 				return FormValidation.error(e,
 						Messages.MySqlKnowledgeBase_ConnectionError());
