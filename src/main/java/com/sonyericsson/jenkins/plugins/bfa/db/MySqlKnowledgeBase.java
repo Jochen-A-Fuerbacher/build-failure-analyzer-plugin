@@ -218,6 +218,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		return false;
 	}
 
+	//TODO: NoSuchFieldError TRACE
 	@Override
 	public void start() throws Exception {
 		try {
