@@ -25,6 +25,7 @@ package com.sonyericsson.jenkins.plugins.bfa.db;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Logger;
 
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -38,93 +39,109 @@ import hudson.model.Descriptor;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 
-public class SqlDBKnowledgeBase extends KnowledgeBase {
-	
-    private static final Logger logger = Logger.getLogger(SqlDBKnowledgeBase.class.getName());
-	
-    private String host;
-    private int port;
-    private String dbName;
-    private String userName;
-    private Secret password;
-    private boolean enableStatistics;
-    private boolean successfulLogging;
-    
-    /**
-     * Getter for the SQL DB user name.
-     * @return the user name.
-     */
-    public String getUserName() {
-        return userName;
-    }
+public class MySqlKnowledgeBase extends KnowledgeBase {
 
-    /**
-     * Getter for the SQL DB password.
-     * @return the password.
-     */
-    public Secret getPassword() {
-        return password;
-    }
+	private static final Logger logger = Logger
+			.getLogger(MySqlKnowledgeBase.class.getName());
 
-   /**
-     * Getter for the host value.
-     * @return the host string.
-     */
-    public String getHost() {
-        return host;
-    }
+	private String host;
+	private int port;
+	private String dbName;
+	private String userName;
+	private Secret password;
+	private boolean enableStatistics;
+	private boolean successfulLogging;
 
-    /**
-     * Getter for the port value.
-     * @return the port number.
-     */
-    public int getPort() {
-        return port;
-    }
-    
-    /**
-     * Getter for the database name value.
-     * @return the database name string.
-     */
-    public String getDbName() {
-        return dbName;
-    }
-    
-    @Override
-    public boolean isStatisticsEnabled() {
-        return enableStatistics;
-    }
+	/**
+	 * Getter for the SQL DB user name.
+	 * 
+	 * @return the user name.
+	 */
+	public String getUserName() {
+		return userName;
+	}
 
-    @Override
-    public boolean isSuccessfulLoggingEnabled() {
-        return successfulLogging;
-    }
-    
-    /**
-     * Standard constructor.
-     * @param host the host to connect to.
-     * @param port the port to connect to.
-     * @param dbName the database name to connect to.
-     * @param userName the user name for the database.
-     * @param password the password for the database.
-     * @param enableStatistics if statistics logging should be enabled or not.
-     * @param successfulLogging if all builds should be logged to the statistics DB
-     */
-    @DataBoundConstructor
-    public SqlDBKnowledgeBase(String host, int port, String dbName, String userName, Secret password,
-                                boolean enableStatistics, boolean successfulLogging) {
-        this.host = host;
-        this.port = port;
-        this.dbName = dbName;
-        this.userName = userName;
-        this.password = password;
-        this.enableStatistics = enableStatistics;
-        this.successfulLogging = successfulLogging;
-    }
+	/**
+	 * Getter for the SQL DB password.
+	 * 
+	 * @return the password.
+	 */
+	public Secret getPassword() {
+		return password;
+	}
+
+	/**
+	 * Getter for the host value.
+	 * 
+	 * @return the host string.
+	 */
+	public String getHost() {
+		return host;
+	}
+
+	/**
+	 * Getter for the port value.
+	 * 
+	 * @return the port number.
+	 */
+	public int getPort() {
+		return port;
+	}
+
+	/**
+	 * Getter for the database name value.
+	 * 
+	 * @return the database name string.
+	 */
+	public String getDbName() {
+		return dbName;
+	}
+
+	@Override
+	public boolean isStatisticsEnabled() {
+		return enableStatistics;
+	}
+
+	@Override
+	public boolean isSuccessfulLoggingEnabled() {
+		return successfulLogging;
+	}
+
+	/**
+	 * Standard constructor.
+	 * 
+	 * @param host
+	 *            the host to connect to.
+	 * @param port
+	 *            the port to connect to.
+	 * @param dbName
+	 *            the database name to connect to.
+	 * @param userName
+	 *            the user name for the database.
+	 * @param password
+	 *            the password for the database.
+	 * @param enableStatistics
+	 *            if statistics logging should be enabled or not.
+	 * @param successfulLogging
+	 *            if all builds should be logged to the statistics DB
+	 */
+	@DataBoundConstructor
+	public MySqlKnowledgeBase(String host, int port, String dbName,
+			String userName, Secret password, boolean enableStatistics,
+			boolean successfulLogging) {
+		this.host = host;
+		this.port = port;
+		this.dbName = dbName;
+		this.userName = userName;
+		this.password = password;
+		this.enableStatistics = enableStatistics;
+		this.successfulLogging = successfulLogging;
+	}
 
 	@Override
 	public Descriptor<KnowledgeBase> getDescriptor() {
-		return Jenkins.getInstance().getDescriptorByType(SqlDBKnowledgeBaseDescriptor.class);
+		return Jenkins.getInstance()
+				.getDescriptorByType(MySqlKnowledgeBaseDescriptor.class);
 	}
 
 	@Override
@@ -190,7 +207,7 @@ public class SqlDBKnowledgeBase extends KnowledgeBase {
 	@Override
 	public void start() throws Exception {
 		// TODO Auto-generated method stub
-
+		
 	}
 
 	@Override
@@ -206,14 +223,16 @@ public class SqlDBKnowledgeBase extends KnowledgeBase {
 	}
 
 	/**
-	 * Descriptor for {@link SqlDBKnowledgeBase}.
+	 * Descriptor for {@link MySqlKnowledgeBase}.
 	 */
 	@Extension
-	public static class SqlDBKnowledgeBaseDescriptor extends KnowledgeBaseDescriptor {
+	public static class MySqlKnowledgeBaseDescriptor
+			extends
+				KnowledgeBaseDescriptor {
 
 		@Override
 		public String getDisplayName() {
-			return Messages.SqlDBKnowledgeBase_DisplayName();
+			return Messages.MySqlKnowledgeBase_DisplayName();
 		}
 	}
 
