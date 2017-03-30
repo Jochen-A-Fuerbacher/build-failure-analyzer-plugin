@@ -27,15 +27,22 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Properties;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
+import org.hibernate.SessionFactory;
+import org.hibernate.cfg.Configuration;
 import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.QueryParameter;
 
+import com.sonyericsson.jenkins.plugins.bfa.Messages;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
-import com.sonyericsson.jenkins.plugins.bfa.Messages;
 
 import hudson.Extension;
+import hudson.Util;
 import hudson.model.Descriptor;
+import hudson.util.FormValidation;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 
@@ -43,6 +50,10 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	private static final Logger logger = Logger
 			.getLogger(MySqlKnowledgeBase.class.getName());
+
+	private static final SessionFactory factory;
+
+	private static final int MYSQL_DEFAULT_PORT = 3306;
 
 	private String host;
 	private int port;
@@ -206,8 +217,22 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void start() throws Exception {
-		// TODO Auto-generated method stub
-		
+		try {
+			Properties prop = new Properties();
+			prop.setProperty("hibernate.connection.url", this.host);
+			prop.setProperty("hibernate.connection.username", this.userName);
+			prop.setProperty("hibernate.connection.password",
+					Secret.toString(this.password));
+			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
+
+			factory = new Configuration()
+					.addPackage("com.concretepage.persistence")
+					.addProperties(prop)
+					.addAnnotatedClass(MySqlKnowledgeBase.class)
+					.buildSessionFactory();
+		} catch (Throwable ex) {
+			throw new ExceptionInInitializerError(ex);
+		}
 	}
 
 	@Override
@@ -233,6 +258,77 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		@Override
 		public String getDisplayName() {
 			return Messages.MySqlKnowledgeBase_DisplayName();
+		}
+
+		/**
+		 * Convenience method for jelly.
+		 * 
+		 * @return the default port.
+		 */
+		public int getDefaultPort() {
+			return MYSQL_DEFAULT_PORT;
+		}
+
+		/**
+		 * Checks that the host name is not empty.
+		 *
+		 * @param value
+		 *            the pattern to check.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is
+		 *         well.
+		 */
+		public FormValidation doCheckHost(
+				@QueryParameter("value") final String value) {
+			if (Util.fixEmpty(value) == null) {
+				return FormValidation.error("Please provide a host name!");
+			} else {
+				Matcher m = Pattern.compile("\\s").matcher(value);
+				if (m.find()) {
+					return FormValidation
+							.error("Host name contains white space!");
+				}
+				return FormValidation.ok();
+			}
+		}
+
+		/**
+		 * Checks that the port number is not empty and is a number.
+		 *
+		 * @param value
+		 *            the port number to check.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is
+		 *         well.
+		 */
+		public FormValidation doCheckPort(
+				@QueryParameter("value") String value) {
+			try {
+				Long.parseLong(value);
+				return FormValidation.ok();
+			} catch (NumberFormatException e) {
+				return FormValidation.error("Please provide a port number!");
+			}
+		}
+
+		/**
+		 * Checks that the database name is not empty.
+		 *
+		 * @param value
+		 *            the database name to check.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is
+		 *         well.
+		 */
+		public FormValidation doCheckDBName(
+				@QueryParameter("value") String value) {
+			if (value == null || value.isEmpty()) {
+				return FormValidation.error("Please provide a database name!");
+			} else {
+				Matcher m = Pattern.compile("\\s").matcher(value);
+				if (m.find()) {
+					return FormValidation
+							.error("Database name contains white space!");
+				}
+				return FormValidation.ok();
+			}
 		}
 	}
 
