@@ -220,13 +220,15 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		return false;
 	}
 
-	//TODO: NoSuchFieldError TRACE
 	@Override
 	public void start() throws Exception {
 		try {
+			String url = this.host.startsWith("jdbc:mysql://") ? this.host : "jdbc:mysql://"+this.host;
+			url = url + ":" + this.port + "/" + this.dbName;
+			
 			Properties prop = new Properties();
 			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
-			prop.setProperty("hibernate.connection.url", this.host);
+			prop.setProperty("hibernate.connection.url", url);
 			prop.setProperty("hibernate.connection.username", this.userName);
 			prop.setProperty("hibernate.connection.password",
 					Secret.toString(this.password));
@@ -369,10 +371,10 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			}
 
 			try {
-				final String connection = "jdbc:mysql://" + host + ":" + port
-						+ "/" + dbName;
+				String url = host.startsWith("jdbc:mysql://") ? host : "jdbc:mysql://"+host;
+				url = url + ":" + port + "/" + dbName;
 				Connection conn = null;
-				conn = DriverManager.getConnection(connection, userName,
+				conn = DriverManager.getConnection(url, userName,
 						password);
 				conn.close();
 				return FormValidation
