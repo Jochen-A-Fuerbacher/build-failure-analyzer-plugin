@@ -173,14 +173,15 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
 
-		EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		List<FailureCause> causes = manager.createQuery("from FAILURECAUSE")
-				.getResultList();
-		manager.getTransaction().commit();
-		manager.close();
-
-		return causes;
+//		EntityManager manager = entityManagerFactory.createEntityManager();
+//		manager.getTransaction().begin();
+//		List<FailureCause> causes = manager.createQuery("from FAILURECAUSE")
+//				.getResultList();
+//		manager.getTransaction().commit();
+//		manager.close();
+//
+//		return causes;
+		return null;
 	}
 
 	@Override
@@ -197,63 +198,67 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public FailureCause getCause(String id) throws Exception {
-		EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		List<FailureCause> causes = manager
-				.createQuery("from FAILURECAUSE where id=" + id)
-				.getResultList();
-		if (causes.size() != 1) {
-			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
-			return null;
-		}
-		FailureCause cause = causes.get(0);
-
-		manager.getTransaction().commit();
-		manager.close();
-		return cause;
+//		EntityManager manager = entityManagerFactory.createEntityManager();
+//		manager.getTransaction().begin();
+//		List<FailureCause> causes = manager
+//				.createQuery("from FAILURECAUSE where id=" + id)
+//				.getResultList();
+//		if (causes.size() != 1) {
+//			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
+//			return null;
+//		}
+//		FailureCause cause = causes.get(0);
+//
+//		manager.getTransaction().commit();
+//		manager.close();
+//		return cause;
+		return null;
 	}
 
 	@Override
 	public FailureCause addCause(FailureCause cause) throws Exception {
-		String id = cause.getId();
-		EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		manager.persist(cause);
-		manager.getTransaction().commit();
-		manager.close();
-
-		return getCause(id);
+//		String id = cause.getId();
+//		EntityManager manager = entityManagerFactory.createEntityManager();
+//		manager.getTransaction().begin();
+//		manager.persist(cause);
+//		manager.getTransaction().commit();
+//		manager.close();
+//
+//		return getCause(id);
+		return null;
 	}
 
 	@Override
 	public FailureCause removeCause(String id) throws Exception {
-		FailureCause cause = getCause(id);
-		if (cause == null) {
-			logger.log(Level.WARNING,
-					"Cannot remove failure cause with id " + id);
-			return null;
-		}
-		EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		manager.remove(cause);
-		manager.getTransaction().commit();
-		manager.close();
-
-		return cause;
+//		FailureCause cause = getCause(id);
+//		if (cause == null) {
+//			logger.log(Level.WARNING,
+//					"Cannot remove failure cause with id " + id);
+//			return null;
+//		}
+//		EntityManager manager = entityManagerFactory.createEntityManager();
+//		manager.getTransaction().begin();
+//		manager.remove(cause);
+//		manager.getTransaction().commit();
+//		manager.close();
+//
+//		return cause;
+		return null;
 	}
 
 	@Override
 	public FailureCause saveCause(FailureCause cause) throws Exception {
-		EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		if (!manager.contains(cause)) {
-			logger.log(Level.WARNING,
-					"Cannot save failure cause with id " + cause.getId()
-							+ ": \n"
-							+ "Failure cause not available in database.");
-			return cause;
-		}
-
+//		EntityManager manager = entityManagerFactory.createEntityManager();
+//		manager.getTransaction().begin();
+//		if (!manager.contains(cause)) {
+//			logger.log(Level.WARNING,
+//					"Cannot save failure cause with id " + cause.getId()
+//							+ ": \n"
+//							+ "Failure cause not available in database.");
+//			return cause;
+//		}
+//
+//		return null;
 		return null;
 	}
 
@@ -265,18 +270,19 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public List<String> getCategories() throws Exception {
-		List<String> categories = new LinkedList<String>();
-
-		Collection<FailureCause> causes = getCauses();
-		for (FailureCause cause : causes) {
-			for (String category : cause.getCategories()) {
-				if (!categories.contains(category)) {
-					categories.add(category);
-				}
-			}
-		}
-
-		return categories;
+//		List<String> categories = new LinkedList<String>();
+//
+//		Collection<FailureCause> causes = getCauses();
+//		for (FailureCause cause : causes) {
+//			for (String category : cause.getCategories()) {
+//				if (!categories.contains(category)) {
+//					categories.add(category);
+//				}
+//			}
+//		}
+//
+//		return categories;
+		return null;
 	}
 
 	@Override
