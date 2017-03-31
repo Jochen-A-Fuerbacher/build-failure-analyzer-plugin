@@ -302,13 +302,16 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
 
 			factory = new Configuration()
-					.addPackage("com.sonyericsson.jenkins.plugins.bfa.model")
 					.addProperties(prop)
-					.addAnnotatedClass(MySqlKnowledgeBase.class)
 					.buildSessionFactory();
+			
+			Properties eProps = new Properties();
+			eProps.setProperty("javax.persistence.jdbc.url", url);
+			eProps.setProperty("javax.persistence.jdbc.user", this.userName);
+			eProps.setProperty("javax.persistence.jdbc.password", Secret.toString(this.password));
 
 			entityManagerFactory = Persistence
-					.createEntityManagerFactory("bfa");
+					.createEntityManagerFactory("bfa", eProps);
 		} catch (Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
