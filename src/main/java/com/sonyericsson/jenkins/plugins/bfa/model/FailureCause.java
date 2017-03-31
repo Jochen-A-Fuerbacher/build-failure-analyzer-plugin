@@ -31,9 +31,13 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
+import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
+import javax.persistence.OneToMany;
 import javax.persistence.Table;
 
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -77,16 +81,29 @@ import net.vz.mongodb.jackson.ObjectId;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @Entity
-@Table(name="FAILURECAUSES")
 public class FailureCause implements Serializable, Action, Describable<FailureCause> {
     private static final Logger logger = Logger.getLogger(FailureCause.class.getName());
+    
+    @javax.persistence.Id
+	@GeneratedValue(generator="increment")
+	@GenericGenerator(name="increment", strategy = "increment")
     private String id;
+    @Column(name = "NAME")
     private String name;
+    @Column(name = "DESCRIPTION")
     private String description;
+    @Column(name = "COMMENT")
     private String comment;
+    @Column(name = "LASTOCCURED")
     private Date lastOccurred;
+    @ElementCollection(targetClass=String.class)
+    @Column(name="CATEGORIES")
     private List<String> categories;
+    @ElementCollection(targetClass=Indication.class)
+    @Column(name = "INDICATIONS")
     private List<Indication> indications;
+    @ElementCollection(targetClass=FailureCauseModification.class)
+    @Column(name = "MODIFICATIONS")
     private List<FailureCauseModification> modifications;
 
     /**
@@ -342,8 +359,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      */
     @Id
     @ObjectId
-	@GeneratedValue(generator="increment")
-	@GenericGenerator(name="increment", strategy = "increment")
     public String getId() {
         return id;
     }
@@ -355,8 +370,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      */
     @Id
     @ObjectId
-	@GeneratedValue(generator="increment")
-	@GenericGenerator(name="increment", strategy = "increment")
     public void setId(String id) {
         this.id = id;
     }
@@ -366,7 +379,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the name.
      */
-    @Column(name = "NAME")
     public String getName() {
         return name;
     }
@@ -376,7 +388,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the description.
      */
-    @Column(name = "DESCRIPTION")
     public String getDescription() {
         return description;
     }
@@ -386,7 +397,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the comment.
      */
-    @Column(name = "COMMENT")
     public String getComment() {
         return comment;
     }
@@ -396,7 +406,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the last occurrence.
      */
-    @Column(name = "LASTOCCURED")
     public Date getLastOccurred() {
         if (lastOccurred != null) {
             return (Date)lastOccurred.clone();
@@ -441,7 +450,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the modifications.
      */
-    @Column(name = "MODIFICATIONS")
     public List<FailureCauseModification> getModifications() {
         return modifications;
     }
@@ -465,7 +473,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the categories.
      */
-    @Column(name = "CATEGORIES")
     public List<String> getCategories() {
         return categories;
     }
@@ -579,7 +586,6 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the list.
      */
-    @Column(name = "INDICATIONS")
     public List<Indication> getIndications() {
         if (indications == null) {
             indications = new LinkedList<Indication>();
