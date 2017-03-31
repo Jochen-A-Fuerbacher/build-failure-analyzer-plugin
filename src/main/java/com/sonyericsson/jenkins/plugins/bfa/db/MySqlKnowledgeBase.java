@@ -27,15 +27,19 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.persistence.Entity;
+import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
-import javax.persistence.Table;
+import javax.persistence.Persistence;
 
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
@@ -54,7 +58,7 @@ import hudson.util.Secret;
 import jenkins.model.Jenkins;
 
 public class MySqlKnowledgeBase extends KnowledgeBase {
-	
+
 	private static final String MYSQL_DRIVER = "com.mysql.jdbc.Driver";
 
 	private static final Logger logger = Logger
@@ -71,7 +75,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	private Secret password;
 	private boolean enableStatistics;
 	private boolean successfulLogging;
-	
+
 	private EntityManagerFactory entityManagerFactory;
 
 	/**
@@ -168,8 +172,15 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		List<FailureCause> causes = manager.createQuery("from FAILURECAUSE")
+				.getResultList();
+		manager.getTransaction().commit();
+		manager.close();
+
+		return causes;
 	}
 
 	@Override
@@ -186,25 +197,63 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public FailureCause getCause(String id) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		List<FailureCause> causes = manager
+				.createQuery("from FAILURECAUSE where id=" + id)
+				.getResultList();
+		if (causes.size() != 1) {
+			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
+			return null;
+		}
+		FailureCause cause = causes.get(0);
+
+		manager.getTransaction().commit();
+		manager.close();
+		return cause;
 	}
 
 	@Override
 	public FailureCause addCause(FailureCause cause) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		String id = cause.getId();
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		manager.persist(cause);
+		manager.getTransaction().commit();
+		manager.close();
+
+		return getCause(id);
 	}
 
 	@Override
 	public FailureCause removeCause(String id) throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		FailureCause cause = getCause(id);
+		if (cause == null) {
+			logger.log(Level.WARNING,
+					"Cannot remove failure cause with id " + id);
+			return null;
+		}
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		manager.remove(cause);
+		manager.getTransaction().commit();
+		manager.close();
+
+		return cause;
 	}
 
 	@Override
 	public FailureCause saveCause(FailureCause cause) throws Exception {
-		// TODO Auto-generated method stub
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		if (!manager.contains(cause)) {
+			logger.log(Level.WARNING,
+					"Cannot save failure cause with id " + cause.getId()
+							+ ": \n"
+							+ "Failure cause not available in database.");
+			return cause;
+		}
+
 		return null;
 	}
 
@@ -216,8 +265,18 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public List<String> getCategories() throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		List<String> categories = new LinkedList<String>();
+
+		Collection<FailureCause> causes = getCauses();
+		for (FailureCause cause : causes) {
+			for (String category : cause.getCategories()) {
+				if (!categories.contains(category)) {
+					categories.add(category);
+				}
+			}
+		}
+
+		return categories;
 	}
 
 	@Override
@@ -229,9 +288,11 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public void start() throws Exception {
 		try {
-			String url = this.host.startsWith("jdbc:mysql://") ? this.host : "jdbc:mysql://"+this.host;
+			String url = this.host.startsWith("jdbc:mysql://")
+					? this.host
+					: "jdbc:mysql://" + this.host;
 			url = url + ":" + this.port + "/" + this.dbName;
-			
+
 			Properties prop = new Properties();
 			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
 			prop.setProperty("hibernate.connection.url", url);
@@ -241,10 +302,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
 
 			factory = new Configuration()
-					.addPackage("com.concretepage.persistence")
+					.addPackage("com.sonyericsson.jenkins.plugins.bfa.model")
 					.addProperties(prop)
 					.addAnnotatedClass(MySqlKnowledgeBase.class)
 					.buildSessionFactory();
+
+			entityManagerFactory = Persistence
+					.createEntityManagerFactory("bfa");
 		} catch (Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
@@ -252,6 +316,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void stop() {
+		entityManagerFactory.close();
 		factory.close();
 	}
 
@@ -376,11 +441,12 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			}
 
 			try {
-				String url = host.startsWith("jdbc:mysql://") ? host : "jdbc:mysql://"+host;
+				String url = host.startsWith("jdbc:mysql://")
+						? host
+						: "jdbc:mysql://" + host;
 				url = url + ":" + port + "/" + dbName;
 				Connection conn = null;
-				conn = DriverManager.getConnection(url, userName,
-						password);
+				conn = DriverManager.getConnection(url, userName, password);
 				conn.close();
 				return FormValidation
 						.ok(Messages.MySqlKnowledgeBase_ConnectionOK());
