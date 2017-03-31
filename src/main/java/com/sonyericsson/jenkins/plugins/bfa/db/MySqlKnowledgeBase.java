@@ -33,6 +33,10 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.persistence.Entity;
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Table;
+
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
 import org.kohsuke.stapler.DataBoundConstructor;
@@ -67,6 +71,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	private Secret password;
 	private boolean enableStatistics;
 	private boolean successfulLogging;
+	
+	private EntityManagerFactory entityManagerFactory;
 
 	/**
 	 * Getter for the SQL DB user name.
@@ -246,8 +252,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void stop() {
-		// TODO Auto-generated method stub
-
+		factory.close();
 	}
 
 	@Override
@@ -385,5 +390,4 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			}
 		}
 	}
-
 }

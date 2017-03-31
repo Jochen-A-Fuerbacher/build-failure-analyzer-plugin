@@ -23,10 +23,36 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.model;
 
+import java.io.Serializable;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Table;
+
+import org.codehaus.jackson.annotate.JsonCreator;
+import org.codehaus.jackson.annotate.JsonIgnore;
+import org.codehaus.jackson.annotate.JsonIgnoreProperties;
+import org.codehaus.jackson.annotate.JsonIgnoreType;
+import org.codehaus.jackson.annotate.JsonProperty;
+import org.hibernate.annotations.GenericGenerator;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.QueryParameter;
+import org.kohsuke.stapler.Stapler;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+
 import com.sonyericsson.jenkins.plugins.bfa.CauseManagement;
 import com.sonyericsson.jenkins.plugins.bfa.PluginImpl;
 import com.sonyericsson.jenkins.plugins.bfa.db.KnowledgeBase;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.Indication;
+
 import hudson.Extension;
 import hudson.Util;
 import hudson.model.Action;
@@ -42,24 +68,6 @@ import jenkins.model.Jenkins;
 import net.sf.json.JSONObject;
 import net.vz.mongodb.jackson.Id;
 import net.vz.mongodb.jackson.ObjectId;
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonIgnore;
-import org.codehaus.jackson.annotate.JsonIgnoreProperties;
-import org.codehaus.jackson.annotate.JsonIgnoreType;
-import org.codehaus.jackson.annotate.JsonProperty;
-import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.QueryParameter;
-import org.kohsuke.stapler.Stapler;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-
-import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 
 /**
@@ -68,6 +76,8 @@ import java.util.logging.Logger;
  * @author Tomas Westling &lt;thomas.westling@sonyericsson.com&gt;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Entity
+@Table(name="FAILURECAUSES")
 public class FailureCause implements Serializable, Action, Describable<FailureCause> {
     private static final Logger logger = Logger.getLogger(FailureCause.class.getName());
     private String id;
@@ -332,6 +342,8 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      */
     @Id
     @ObjectId
+	@GeneratedValue(generator="increment")
+	@GenericGenerator(name="increment", strategy = "increment")
     public String getId() {
         return id;
     }
@@ -343,6 +355,8 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      */
     @Id
     @ObjectId
+	@GeneratedValue(generator="increment")
+	@GenericGenerator(name="increment", strategy = "increment")
     public void setId(String id) {
         this.id = id;
     }
@@ -352,6 +366,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the name.
      */
+    @Column(name = "NAME")
     public String getName() {
         return name;
     }
@@ -361,6 +376,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the description.
      */
+    @Column(name = "DESCRIPTION")
     public String getDescription() {
         return description;
     }
@@ -370,6 +386,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the comment.
      */
+    @Column(name = "COMMENT")
     public String getComment() {
         return comment;
     }
@@ -379,6 +396,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the last occurrence.
      */
+    @Column(name = "LASTOCCURED")
     public Date getLastOccurred() {
         if (lastOccurred != null) {
             return (Date)lastOccurred.clone();
@@ -423,6 +441,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the modifications.
      */
+    @Column(name = "MODIFICATIONS")
     public List<FailureCauseModification> getModifications() {
         return modifications;
     }
@@ -446,6 +465,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the categories.
      */
+    @Column(name = "CATEGORIES")
     public List<String> getCategories() {
         return categories;
     }
@@ -559,6 +579,7 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
      *
      * @return the list.
      */
+    @Column(name = "INDICATIONS")
     public List<Indication> getIndications() {
         if (indications == null) {
             indications = new LinkedList<Indication>();
