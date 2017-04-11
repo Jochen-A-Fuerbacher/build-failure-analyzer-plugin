@@ -27,17 +27,12 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
 import java.util.Properties;
-import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
@@ -306,6 +301,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			prop.setProperty("hibernate.connection.password",
 					Secret.toString(this.password));
 			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
+			prop.setProperty("hibernate.hbm2ddl.auto", "update");
 
 			factory = new Configuration()
 					.addProperties(prop)
@@ -315,6 +311,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			eProps.setProperty("javax.persistence.jdbc.url", url);
 			eProps.setProperty("javax.persistence.jdbc.user", this.userName);
 			eProps.setProperty("javax.persistence.jdbc.password", Secret.toString(this.password));
+			eProps.setProperty("hibernate.show_sql", "true");
 
 			entityManagerFactory = Persistence
 					.createEntityManagerFactory("bfa", eProps);

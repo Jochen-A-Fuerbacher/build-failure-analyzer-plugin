@@ -23,17 +23,20 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.model;
 
-import org.codehaus.jackson.annotate.JsonCreator;
-import org.codehaus.jackson.annotate.JsonProperty;
-
 import java.io.Serializable;
 import java.util.Date;
+
+import javax.persistence.Embeddable;
+
+import org.codehaus.jackson.annotate.JsonCreator;
+import org.codehaus.jackson.annotate.JsonProperty;
 
 /**
  * A historical record of a modification occurrence by a user.
  *
  * @author Felix Hall &lt;felix.hall@sonymobile.com&gt;
  */
+@Embeddable
 public class FailureCauseModification implements Serializable {
     private String user;
     private Date time;

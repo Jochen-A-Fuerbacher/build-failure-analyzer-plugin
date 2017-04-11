@@ -24,21 +24,26 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.model.indication;
 
-import com.sonyericsson.jenkins.plugins.bfa.model.FailureReader;
-import hudson.ExtensionList;
-import hudson.model.Describable;
-import hudson.model.Descriptor;
-import hudson.model.Hudson;
-import hudson.util.FormValidation;
+import java.io.Serializable;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import javax.persistence.Embeddable;
+
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
 import org.codehaus.jackson.annotate.JsonIgnoreType;
 import org.codehaus.jackson.annotate.JsonProperty;
 import org.codehaus.jackson.annotate.JsonTypeInfo;
 import org.kohsuke.stapler.QueryParameter;
-import java.io.Serializable;
-import java.util.regex.Pattern;
-import java.util.regex.PatternSyntaxException;
+
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureReader;
+
+import hudson.ExtensionList;
+import hudson.model.Describable;
+import hudson.model.Descriptor;
+import hudson.model.Hudson;
+import hudson.util.FormValidation;
 
 /**
  * Indication that can match a search string for a specific reader.
@@ -46,6 +51,7 @@ import java.util.regex.PatternSyntaxException;
  * @author Tomas Westling &lt;thomas.westling@sonyericsson.com&gt;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
+@Embeddable
 public abstract class Indication implements Describable<Indication>, Serializable {
 
     /**
