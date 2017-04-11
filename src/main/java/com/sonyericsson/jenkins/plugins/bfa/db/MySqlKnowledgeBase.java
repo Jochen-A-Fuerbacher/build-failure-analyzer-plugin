@@ -27,12 +27,15 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Persistence;
 
@@ -168,15 +171,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
 
-//		EntityManager manager = entityManagerFactory.createEntityManager();
-//		manager.getTransaction().begin();
-//		List<FailureCause> causes = manager.createQuery("from FAILURECAUSE")
-//				.getResultList();
-//		manager.getTransaction().commit();
-//		manager.close();
-//
-//		return causes;
-		return null;
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		List<FailureCause> causes = manager.createQuery("from FailureCause")
+				.getResultList();
+		manager.getTransaction().commit();
+		manager.close();
+
+		return causes;
 	}
 
 	@Override
@@ -193,67 +195,63 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public FailureCause getCause(String id) throws Exception {
-//		EntityManager manager = entityManagerFactory.createEntityManager();
-//		manager.getTransaction().begin();
-//		List<FailureCause> causes = manager
-//				.createQuery("from FAILURECAUSE where id=" + id)
-//				.getResultList();
-//		if (causes.size() != 1) {
-//			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
-//			return null;
-//		}
-//		FailureCause cause = causes.get(0);
-//
-//		manager.getTransaction().commit();
-//		manager.close();
-//		return cause;
-		return null;
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		List<FailureCause> causes = manager
+				.createQuery("from FAILURECAUSE where id=" + id)
+				.getResultList();
+		if (causes.size() != 1) {
+			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
+			return null;
+		}
+		FailureCause cause = causes.get(0);
+
+		manager.getTransaction().commit();
+		manager.close();
+		return cause;
 	}
 
 	@Override
 	public FailureCause addCause(FailureCause cause) throws Exception {
-//		String id = cause.getId();
-//		EntityManager manager = entityManagerFactory.createEntityManager();
-//		manager.getTransaction().begin();
-//		manager.persist(cause);
-//		manager.getTransaction().commit();
-//		manager.close();
-//
-//		return getCause(id);
-		return null;
+		String id = cause.getId();
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		manager.persist(cause);
+		manager.getTransaction().commit();
+		manager.close();
+
+		return getCause(id);
 	}
 
 	@Override
 	public FailureCause removeCause(String id) throws Exception {
-//		FailureCause cause = getCause(id);
-//		if (cause == null) {
-//			logger.log(Level.WARNING,
-//					"Cannot remove failure cause with id " + id);
-//			return null;
-//		}
-//		EntityManager manager = entityManagerFactory.createEntityManager();
-//		manager.getTransaction().begin();
-//		manager.remove(cause);
-//		manager.getTransaction().commit();
-//		manager.close();
-//
-//		return cause;
-		return null;
+		FailureCause cause = getCause(id);
+		if (cause == null) {
+			logger.log(Level.WARNING,
+					"Cannot remove failure cause with id " + id);
+			return null;
+		}
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		manager.remove(cause);
+		manager.getTransaction().commit();
+		manager.close();
+
+		return cause;
 	}
 
 	@Override
 	public FailureCause saveCause(FailureCause cause) throws Exception {
-//		EntityManager manager = entityManagerFactory.createEntityManager();
-//		manager.getTransaction().begin();
-//		if (!manager.contains(cause)) {
-//			logger.log(Level.WARNING,
-//					"Cannot save failure cause with id " + cause.getId()
-//							+ ": \n"
-//							+ "Failure cause not available in database.");
-//			return cause;
-//		}
-//
-//		return null;
+		EntityManager manager = entityManagerFactory.createEntityManager();
+		manager.getTransaction().begin();
+		if (!manager.contains(cause)) {
+			logger.log(Level.WARNING,
+					"Cannot save failure cause with id " + cause.getId()
+							+ ": \n"
+							+ "Failure cause not available in database.");
+			return cause;
+		}
+
 		return null;
 	}
 
@@ -265,19 +263,18 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public List<String> getCategories() throws Exception {
-//		List<String> categories = new LinkedList<String>();
-//
-//		Collection<FailureCause> causes = getCauses();
-//		for (FailureCause cause : causes) {
-//			for (String category : cause.getCategories()) {
-//				if (!categories.contains(category)) {
-//					categories.add(category);
-//				}
-//			}
-//		}
-//
-//		return categories;
-		return null;
+		List<String> categories = new LinkedList<String>();
+
+		Collection<FailureCause> causes = getCauses();
+		for (FailureCause cause : causes) {
+			for (String category : cause.getCategories()) {
+				if (!categories.contains(category)) {
+					categories.add(category);
+				}
+			}
+		}
+
+		return categories;
 	}
 
 	@Override
@@ -303,18 +300,19 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
 			prop.setProperty("hibernate.hbm2ddl.auto", "update");
 
-			factory = new Configuration()
-					.addProperties(prop)
+			factory = new Configuration().addProperties(prop)
 					.buildSessionFactory();
-			
+
+			//Additional properties for persistence.xml
 			Properties eProps = new Properties();
 			eProps.setProperty("javax.persistence.jdbc.url", url);
 			eProps.setProperty("javax.persistence.jdbc.user", this.userName);
-			eProps.setProperty("javax.persistence.jdbc.password", Secret.toString(this.password));
+			eProps.setProperty("javax.persistence.jdbc.password",
+					Secret.toString(this.password));
 			eProps.setProperty("hibernate.show_sql", "true");
 
-			entityManagerFactory = Persistence
-					.createEntityManagerFactory("bfa", eProps);
+			entityManagerFactory = Persistence.createEntityManagerFactory("bfa",
+					eProps);
 		} catch (Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
