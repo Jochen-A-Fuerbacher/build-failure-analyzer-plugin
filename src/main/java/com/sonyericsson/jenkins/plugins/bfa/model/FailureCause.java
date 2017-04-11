@@ -31,14 +31,10 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
-import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
-import javax.persistence.OneToMany;
-import javax.persistence.Table;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
@@ -99,10 +95,10 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
     @ElementCollection(targetClass=String.class)
     @Column(name="CATEGORIES")
     private List<String> categories;
-    @ElementCollection(targetClass=Indication.class)
+    @ElementCollection
     @Column(name = "INDICATIONS")
     private List<Indication> indications;
-    @ElementCollection(targetClass=FailureCauseModification.class)
+    @ElementCollection
     @Column(name = "MODIFICATIONS")
     private List<FailureCauseModification> modifications;
 
