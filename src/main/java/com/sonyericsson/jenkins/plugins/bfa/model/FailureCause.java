@@ -35,6 +35,7 @@ import javax.persistence.Column;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
+import javax.persistence.Transient;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
@@ -81,8 +82,8 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
     private static final Logger logger = Logger.getLogger(FailureCause.class.getName());
     
     @javax.persistence.Id
-	@GeneratedValue(generator="increment")
-	@GenericGenerator(name="increment", strategy = "increment")
+	@GeneratedValue(generator="system-uuid")
+	@GenericGenerator(name="system-uuid", strategy = "uuid")
     private String id;
     @Column(name = "NAME")
     private String name;
