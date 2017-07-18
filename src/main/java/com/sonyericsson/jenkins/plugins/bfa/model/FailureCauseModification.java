@@ -38,45 +38,53 @@ import org.codehaus.jackson.annotate.JsonProperty;
  */
 @Embeddable
 public class FailureCauseModification implements Serializable {
-    private String user;
-    private Date time;
+	private String user;
+	private Date time;
 
-    /**
-     * Constructor for FailureCauseModification.
-     *
-     * @param user The user who made the modification.
-     * @param time The time at which the modification was done.
-     */
-    @JsonCreator
-    public FailureCauseModification(@JsonProperty("user") String user, @JsonProperty("time") Date time) {
-        this.user = user;
-        if (time == null) {
-            this.time = null;
-        } else {
-            this.time = (Date)time.clone();
-        }
-    }
+	/**
+	 * Constructor for FailureCauseModification.
+	 *
+	 * @param user
+	 *            The user who made the modification.
+	 * @param time
+	 *            The time at which the modification was done.
+	 */
+	@JsonCreator
+	public FailureCauseModification(@JsonProperty("user") String user, @JsonProperty("time") Date time) {
+		this.user = user;
+		if (time == null) {
+			this.time = null;
+		} else {
+			this.time = (Date) time.clone();
+		}
+	}
 
-    /**
-     * Getter for the time.
-     *
-     * @return The time at which the modification was done.
-     */
-    public Date getTime() {
-        if (time == null) {
-            return null;
-        } else {
-            return (Date)time.clone();
-        }
-    }
+	/**
+	 * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
+	 */
+	public FailureCauseModification() {
+	}
 
-    /**
-     * Getter for the user.
-     *
-     * @return The user who made the modification.
-     */
-    public String getUser() {
-        return user;
-    }
+	/**
+	 * Getter for the time.
+	 *
+	 * @return The time at which the modification was done.
+	 */
+	public Date getTime() {
+		if (time == null) {
+			return null;
+		} else {
+			return (Date) time.clone();
+		}
+	}
+
+	/**
+	 * Getter for the user.
+	 *
+	 * @return The user who made the modification.
+	 */
+	public String getUser() {
+		return user;
+	}
 
 }

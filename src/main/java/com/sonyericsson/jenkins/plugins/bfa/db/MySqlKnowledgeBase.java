@@ -41,6 +41,7 @@ import javax.persistence.Persistence;
 
 import org.hibernate.SessionFactory;
 import org.hibernate.cfg.Configuration;
+import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 
@@ -62,8 +63,6 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	private static final Logger logger = Logger
 			.getLogger(MySqlKnowledgeBase.class.getName());
 
-	private static SessionFactory factory;
-
 	private static final int MYSQL_DEFAULT_PORT = 3306;
 
 	private String host;
@@ -74,7 +73,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	private boolean enableStatistics;
 	private boolean successfulLogging;
 
-	private EntityManagerFactory entityManagerFactory;
+	private transient EntityManagerFactory entityManagerFactory;
 
 	/**
 	 * Getter for the SQL DB user name.
@@ -291,17 +290,17 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 					: "jdbc:mysql://" + this.host;
 			url = url + ":" + this.port + "/" + this.dbName;
 
-			Properties prop = new Properties();
-			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
-			prop.setProperty("hibernate.connection.url", url);
-			prop.setProperty("hibernate.connection.username", this.userName);
-			prop.setProperty("hibernate.connection.password",
-					Secret.toString(this.password));
-			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
-			prop.setProperty("hibernate.hbm2ddl.auto", "update");
-
-			factory = new Configuration().addProperties(prop)
-					.buildSessionFactory();
+//			Properties prop = new Properties();
+//			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
+//			prop.setProperty("hibernate.connection.url", url);
+//			prop.setProperty("hibernate.connection.username", this.userName);
+//			prop.setProperty("hibernate.connection.password",
+//					Secret.toString(this.password));
+//			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
+//			prop.setProperty("hibernate.hbm2ddl.auto", "update");
+//
+//			factory = new Configuration().addProperties(prop)
+//					.buildSessionFactory();
 
 			//Additional properties for persistence.xml
 			Properties eProps = new Properties();
@@ -309,9 +308,9 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			eProps.setProperty("javax.persistence.jdbc.user", this.userName);
 			eProps.setProperty("javax.persistence.jdbc.password",
 					Secret.toString(this.password));
-			eProps.setProperty("hibernate.show_sql", "true");
 
-			entityManagerFactory = Persistence.createEntityManagerFactory("bfa",
+			//provider can't be found with Persistence.createEntityManagerFactory because of packing. use hibernate directly.
+			entityManagerFactory = new HibernatePersistenceProvider().createEntityManagerFactory("bfa",
 					eProps);
 		} catch (Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
@@ -320,8 +319,9 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void stop() {
+		if (entityManagerFactory!=null && entityManagerFactory.isOpen()) {
 		entityManagerFactory.close();
-		factory.close();
+		}
 	}
 
 	@Override
