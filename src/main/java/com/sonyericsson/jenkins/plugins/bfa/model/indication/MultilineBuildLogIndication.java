@@ -33,11 +33,14 @@ import org.kohsuke.stapler.DataBoundConstructor;
 
 import java.util.regex.Pattern;
 
+import javax.persistence.Entity;
+
 /**
  * Build log indication that matches over multiple lines.
  *
  * @author Andrew Bayer
  */
+@Entity
 public class MultilineBuildLogIndication extends BuildLogIndication {
 
     private static final long serialVersionUID = 8436383594898812087L;

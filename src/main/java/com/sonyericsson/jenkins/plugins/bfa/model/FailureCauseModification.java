@@ -26,7 +26,10 @@ package com.sonyericsson.jenkins.plugins.bfa.model;
 import java.io.Serializable;
 import java.util.Date;
 
-import javax.persistence.Embeddable;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;
@@ -36,8 +39,12 @@ import org.codehaus.jackson.annotate.JsonProperty;
  *
  * @author Felix Hall &lt;felix.hall@sonymobile.com&gt;
  */
-@Embeddable
+@Entity
 public class FailureCauseModification implements Serializable {
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private long id;
+
 	private String user;
 	private Date time;
 

@@ -28,7 +28,12 @@ import java.io.Serializable;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
-import javax.persistence.Embeddable;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Inheritance;
+import javax.persistence.InheritanceType;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
@@ -51,112 +56,121 @@ import hudson.util.FormValidation;
  * @author Tomas Westling &lt;thomas.westling@sonyericsson.com&gt;
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
-@Embeddable
+@Entity
+@Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 public abstract class Indication implements Describable<Indication>, Serializable {
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private long id;
 
-    /**
-     * The user-provided regular expression.
-     */
-    private String pattern;
+	/**
+	 * The user-provided regular expression.
+	 */
+	private String pattern;
 
-    /**
-     * @param pattern the String value.
-     */
-    @JsonCreator
-    public Indication(@JsonProperty("pattern") String pattern) {
-        this.pattern = pattern;
-    }
+	/**
+	 * @param pattern
+	 *            the String value.
+	 */
+	@JsonCreator
+	public Indication(@JsonProperty("pattern") String pattern) {
+		this.pattern = pattern;
+	}
 
-    /**
-     * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
-     */
-    protected Indication() {
-    }
+	/**
+	 * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
+	 */
+	protected Indication() {
+	}
 
-    /**
-     * @return The user-provided regular expression.
-     */
-    @JsonProperty("pattern")
-    public String getUserProvidedExpression() {
-        return pattern;
-    }
+	/**
+	 * @return The user-provided regular expression.
+	 */
+	@JsonProperty("pattern")
+	public String getUserProvidedExpression() {
+		return pattern;
+	}
 
-    /**
-     * Gets a FailureReader used for finding this indication.
-     * @return a FailureReader.
-     */
-    public abstract FailureReader getReader();
+	/**
+	 * Gets a FailureReader used for finding this indication.
+	 *
+	 * @return a FailureReader.
+	 */
+	public abstract FailureReader getReader();
 
-    /**
-     * Checks if the indication is correctly configured.
-     * Default implementation checks for pattern compilation errors.
-     * Override this method to provide more validation.
-     *
-     * @return {@link hudson.util.FormValidation#ok()} if everything is well.
-     * @see IndicationDescriptor#doHelp(org.kohsuke.stapler.StaplerRequest, org.kohsuke.stapler.StaplerResponse)
-     */
-    public FormValidation validate() {
-        return IndicationDescriptor.checkPattern(getUserProvidedExpression());
-    }
+	/**
+	 * Checks if the indication is correctly configured. Default implementation checks for pattern
+	 * compilation errors. Override this method to provide more validation.
+	 *
+	 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
+	 * @see IndicationDescriptor#doHelp(org.kohsuke.stapler.StaplerRequest,
+	 *      org.kohsuke.stapler.StaplerResponse)
+	 */
+	public FormValidation validate() {
+		return IndicationDescriptor.checkPattern(getUserProvidedExpression());
+	}
 
-    /**
-     * Getter for the pattern to match. The compiled pattern may not be identical to the pattern provided by the user.
-     *
-     * @return the pattern to match.
-     */
-    @JsonIgnore
-    public abstract Pattern getPattern();
+	/**
+	 * Getter for the pattern to match. The compiled pattern may not be identical to the pattern
+	 * provided by the user.
+	 *
+	 * @return the pattern to match.
+	 */
+	@JsonIgnore
+	public abstract Pattern getPattern();
 
-    @Override
-    public String toString() {
-        return getUserProvidedExpression();
-    }
+	@Override
+	public String toString() {
+		return getUserProvidedExpression();
+	}
 
-    /**
-     * The descriptor for this indicator.
-     */
-    @JsonIgnoreType
-    public abstract static class IndicationDescriptor extends Descriptor<Indication> {
+	/**
+	 * The descriptor for this indicator.
+	 */
+	@JsonIgnoreType
+	public abstract static class IndicationDescriptor extends Descriptor<Indication> {
 
-        /**
-         * Provides a list of all registered descriptors of this type.
-         *
-         * @return the list of descriptors.
-         */
-        public static ExtensionList<IndicationDescriptor> getAll() {
-            return Hudson.getInstance().getExtensionList(IndicationDescriptor.class);
-        }
+		/**
+		 * Provides a list of all registered descriptors of this type.
+		 *
+		 * @return the list of descriptors.
+		 */
+		public static ExtensionList<IndicationDescriptor> getAll() {
+			return Hudson.getInstance().getExtensionList(IndicationDescriptor.class);
+		}
 
-        /**
-         * Checks that the pattern is a valid regexp.
-         *
-         * @param value the pattern to check.
-         * @return {@link hudson.util.FormValidation#ok()} if everything is well.
-         */
-        public static FormValidation checkPattern(@QueryParameter String value) {
-            if (value == null || value.isEmpty()) {
-                return FormValidation.error("Please provide a pattern!");
-            }
-            try {
-                Pattern.compile(value);
-                return FormValidation.ok();
-            } catch (PatternSyntaxException e) {
-                return FormValidation.error("Bad syntax! " + e.getMessage());
-            } catch (Exception e) {
-                return FormValidation.warning("Unpredicted error. " + e.getMessage());
-            }
-        }
+		/**
+		 * Checks that the pattern is a valid regexp.
+		 *
+		 * @param value
+		 *            the pattern to check.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
+		 */
+		public static FormValidation checkPattern(@QueryParameter String value) {
+			if (value == null || value.isEmpty()) {
+				return FormValidation.error("Please provide a pattern!");
+			}
+			try {
+				Pattern.compile(value);
+				return FormValidation.ok();
+			} catch (final PatternSyntaxException e) {
+				return FormValidation.error("Bad syntax! " + e.getMessage());
+			} catch (final Exception e) {
+				return FormValidation.warning("Unpredicted error. " + e.getMessage());
+			}
+		}
 
-        /**
-         * Checks that the pattern is a valid regexp.
-         *
-         * @param value the pattern to check.
-         * @return {@link hudson.util.FormValidation#ok()} if everything is well.
-         * @see #checkPattern(String)
-         */
-        public FormValidation doCheckPattern(@QueryParameter String value) {
-            return checkPattern(value);
-        }
-    }
+		/**
+		 * Checks that the pattern is a valid regexp.
+		 *
+		 * @param value
+		 *            the pattern to check.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
+		 * @see #checkPattern(String)
+		 */
+		public FormValidation doCheckPattern(@QueryParameter String value) {
+			return checkPattern(value);
+		}
+	}
 
 }

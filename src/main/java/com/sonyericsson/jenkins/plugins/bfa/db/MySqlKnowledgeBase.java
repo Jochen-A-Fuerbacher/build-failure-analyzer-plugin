@@ -37,10 +37,8 @@ import java.util.regex.Pattern;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
-import javax.persistence.Persistence;
+import javax.persistence.TypedQuery;
 
-import org.hibernate.SessionFactory;
-import org.hibernate.cfg.Configuration;
 import org.hibernate.jpa.HibernatePersistenceProvider;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -65,19 +63,19 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	private static final int MYSQL_DEFAULT_PORT = 3306;
 
-	private String host;
-	private int port;
-	private String dbName;
-	private String userName;
-	private Secret password;
-	private boolean enableStatistics;
-	private boolean successfulLogging;
+	private final String host;
+	private final int port;
+	private final String dbName;
+	private final String userName;
+	private final Secret password;
+	private final boolean enableStatistics;
+	private final boolean successfulLogging;
 
 	private transient EntityManagerFactory entityManagerFactory;
 
 	/**
 	 * Getter for the SQL DB user name.
-	 * 
+	 *
 	 * @return the user name.
 	 */
 	public String getUserName() {
@@ -86,7 +84,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	/**
 	 * Getter for the SQL DB password.
-	 * 
+	 *
 	 * @return the password.
 	 */
 	public Secret getPassword() {
@@ -95,7 +93,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	/**
 	 * Getter for the host value.
-	 * 
+	 *
 	 * @return the host string.
 	 */
 	public String getHost() {
@@ -104,7 +102,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	/**
 	 * Getter for the port value.
-	 * 
+	 *
 	 * @return the port number.
 	 */
 	public int getPort() {
@@ -113,7 +111,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	/**
 	 * Getter for the database name value.
-	 * 
+	 *
 	 * @return the database name string.
 	 */
 	public String getDbName() {
@@ -132,7 +130,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	/**
 	 * Standard constructor.
-	 * 
+	 *
 	 * @param host
 	 *            the host to connect to.
 	 * @param port
@@ -169,11 +167,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
-
-		EntityManager manager = entityManagerFactory.createEntityManager();
+		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
-		List<FailureCause> causes = manager.createQuery("from FailureCause")
+		final List<FailureCause> causes = manager.createQuery("select f from FailureCause f", FailureCause.class)
 				.getResultList();
+		for (final FailureCause f : causes) {
+			loadLazyCollections(f);
+		}
 		manager.getTransaction().commit();
 		manager.close();
 
@@ -182,57 +182,61 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauseNames() throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		return getCauses();
 	}
 
 	@Override
 	public Collection<FailureCause> getShallowCauses() throws Exception {
-		// TODO Auto-generated method stub
-		return null;
+		return getCauses();
 	}
 
 	@Override
 	public FailureCause getCause(String id) throws Exception {
-		EntityManager manager = entityManagerFactory.createEntityManager();
+		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
-		List<FailureCause> causes = manager
-				.createQuery("from FAILURECAUSE where id=" + id)
-				.getResultList();
+		final String sql = "select f from FailureCause f where f.id=:id";
+		final TypedQuery<FailureCause> query = manager.createQuery(sql, FailureCause.class);
+		query.setParameter("id", id);
+		final List<FailureCause> causes = query.getResultList();
 		if (causes.size() != 1) {
 			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
 			return null;
 		}
-		FailureCause cause = causes.get(0);
-
+		final FailureCause cause = causes.get(0);
+		loadLazyCollections(cause);
 		manager.getTransaction().commit();
 		manager.close();
 		return cause;
 	}
 
+	private void loadLazyCollections(FailureCause f) {
+		f.getModifications().size();
+		f.getIndications().size();
+	}
+
 	@Override
 	public FailureCause addCause(FailureCause cause) throws Exception {
-		String id = cause.getId();
-		EntityManager manager = entityManagerFactory.createEntityManager();
+		final String id = cause.getId();
+		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
 		manager.persist(cause);
 		manager.getTransaction().commit();
 		manager.close();
 
-		return getCause(id);
+		return getCause(cause.getId());
 	}
 
 	@Override
 	public FailureCause removeCause(String id) throws Exception {
-		FailureCause cause = getCause(id);
+		final FailureCause cause = getCause(id);
 		if (cause == null) {
 			logger.log(Level.WARNING,
 					"Cannot remove failure cause with id " + id);
 			return null;
 		}
-		EntityManager manager = entityManagerFactory.createEntityManager();
+		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
-		manager.remove(cause);
+		manager.remove(manager.contains(cause)?cause:manager.merge(cause));
 		manager.getTransaction().commit();
 		manager.close();
 
@@ -241,17 +245,19 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public FailureCause saveCause(FailureCause cause) throws Exception {
-		EntityManager manager = entityManagerFactory.createEntityManager();
+		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
-		if (!manager.contains(cause)) {
+		if (getCause(cause.getId()) == null) {
 			logger.log(Level.WARNING,
 					"Cannot save failure cause with id " + cause.getId()
 							+ ": \n"
 							+ "Failure cause not available in database.");
 			return cause;
 		}
-
-		return null;
+		final FailureCause merged = manager.merge(cause);
+		manager.getTransaction().commit();
+		manager.close();
+		return merged;
 	}
 
 	@Override
@@ -262,11 +268,11 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public List<String> getCategories() throws Exception {
-		List<String> categories = new LinkedList<String>();
+		final List<String> categories = new LinkedList<String>();
 
-		Collection<FailureCause> causes = getCauses();
-		for (FailureCause cause : causes) {
-			for (String category : cause.getCategories()) {
+		final Collection<FailureCause> causes = getCauses();
+		for (final FailureCause cause : causes) {
+			for (final String category : cause.getCategories()) {
 				if (!categories.contains(category)) {
 					categories.add(category);
 				}
@@ -290,37 +296,26 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 					: "jdbc:mysql://" + this.host;
 			url = url + ":" + this.port + "/" + this.dbName;
 
-//			Properties prop = new Properties();
-//			prop.setProperty("hibernate.connection.driver_class", MYSQL_DRIVER);
-//			prop.setProperty("hibernate.connection.url", url);
-//			prop.setProperty("hibernate.connection.username", this.userName);
-//			prop.setProperty("hibernate.connection.password",
-//					Secret.toString(this.password));
-//			prop.setProperty("dialect", "org.hibernate.dialect.MySQLDialect");
-//			prop.setProperty("hibernate.hbm2ddl.auto", "update");
-//
-//			factory = new Configuration().addProperties(prop)
-//					.buildSessionFactory();
-
-			//Additional properties for persistence.xml
-			Properties eProps = new Properties();
+			// Additional properties for persistence.xml
+			final Properties eProps = new Properties();
 			eProps.setProperty("javax.persistence.jdbc.url", url);
 			eProps.setProperty("javax.persistence.jdbc.user", this.userName);
 			eProps.setProperty("javax.persistence.jdbc.password",
 					Secret.toString(this.password));
 
-			//provider can't be found with Persistence.createEntityManagerFactory because of packing. use hibernate directly.
+			// provider can't be found with Persistence.createEntityManagerFactory because of
+			// packing. use hibernate directly.
 			entityManagerFactory = new HibernatePersistenceProvider().createEntityManagerFactory("bfa",
 					eProps);
-		} catch (Throwable ex) {
+		} catch (final Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
 	}
 
 	@Override
 	public void stop() {
-		if (entityManagerFactory!=null && entityManagerFactory.isOpen()) {
-		entityManagerFactory.close();
+		if (entityManagerFactory != null && entityManagerFactory.isOpen()) {
+			entityManagerFactory.close();
 		}
 	}
 
@@ -336,7 +331,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Extension
 	public static class MySqlKnowledgeBaseDescriptor
 			extends
-				KnowledgeBaseDescriptor {
+			KnowledgeBaseDescriptor {
 
 		@Override
 		public String getDisplayName() {
@@ -345,7 +340,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 		/**
 		 * Convenience method for jelly.
-		 * 
+		 *
 		 * @return the default port.
 		 */
 		public int getDefaultPort() {
@@ -357,15 +352,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		 *
 		 * @param value
 		 *            the pattern to check.
-		 * @return {@link hudson.util.FormValidation#ok()} if everything is
-		 *         well.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
 		 */
 		public FormValidation doCheckHost(
 				@QueryParameter("value") final String value) {
 			if (Util.fixEmpty(value) == null) {
 				return FormValidation.error("Please provide a host name!");
 			} else {
-				Matcher m = Pattern.compile("\\s").matcher(value);
+				final Matcher m = Pattern.compile("\\s").matcher(value);
 				if (m.find()) {
 					return FormValidation
 							.error("Host name contains white space!");
@@ -379,15 +373,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		 *
 		 * @param value
 		 *            the port number to check.
-		 * @return {@link hudson.util.FormValidation#ok()} if everything is
-		 *         well.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
 		 */
 		public FormValidation doCheckPort(
 				@QueryParameter("value") String value) {
 			try {
 				Long.parseLong(value);
 				return FormValidation.ok();
-			} catch (NumberFormatException e) {
+			} catch (final NumberFormatException e) {
 				return FormValidation.error("Please provide a port number!");
 			}
 		}
@@ -397,15 +390,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		 *
 		 * @param value
 		 *            the database name to check.
-		 * @return {@link hudson.util.FormValidation#ok()} if everything is
-		 *         well.
+		 * @return {@link hudson.util.FormValidation#ok()} if everything is well.
 		 */
 		public FormValidation doCheckDBName(
 				@QueryParameter("value") String value) {
 			if (value == null || value.isEmpty()) {
 				return FormValidation.error("Please provide a database name!");
 			} else {
-				Matcher m = Pattern.compile("\\s").matcher(value);
+				final Matcher m = Pattern.compile("\\s").matcher(value);
 				if (m.find()) {
 					return FormValidation
 							.error("Database name contains white space!");
@@ -413,9 +405,10 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				return FormValidation.ok();
 			}
 		}
+
 		/**
 		 * Tests if the provided parameters can connect to the Mongo database.
-		 * 
+		 *
 		 * @param host
 		 *            the host name.
 		 * @param port
@@ -439,7 +432,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 			try {
 				Class.forName(MYSQL_DRIVER);
-			} catch (ClassNotFoundException e) {
+			} catch (final ClassNotFoundException e) {
 				return FormValidation.error(e,
 						Messages.MySqlKnowledgeBase_ConnectionError());
 			}
@@ -454,7 +447,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				conn.close();
 				return FormValidation
 						.ok(Messages.MySqlKnowledgeBase_ConnectionOK());
-			} catch (SQLException e) {
+			} catch (final SQLException e) {
 				return FormValidation.error(e,
 						Messages.MySqlKnowledgeBase_ConnectionError());
 			}

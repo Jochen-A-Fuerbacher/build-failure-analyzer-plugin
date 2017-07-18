@@ -45,11 +45,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import javax.persistence.Entity;
+
 /**
  * Indication that parses the build log file for a pattern.
  *
  * @author Tomas Westling &lt;thomas.westling@sonyericsson.com&gt;
  */
+@Entity
 public class BuildLogIndication extends Indication {
 
     private static final long serialVersionUID = -2889792693081908532L;

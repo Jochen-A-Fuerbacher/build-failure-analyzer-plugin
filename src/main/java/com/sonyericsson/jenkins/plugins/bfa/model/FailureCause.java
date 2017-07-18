@@ -31,10 +31,13 @@ import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import javax.persistence.CascadeType;
 import javax.persistence.Column;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
+import javax.persistence.FetchType;
 import javax.persistence.GeneratedValue;
+import javax.persistence.OneToMany;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnore;
@@ -92,13 +95,13 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
 	private String comment;
 	@Column(name = "LASTOCCURED")
 	private Date lastOccurred;
-	@ElementCollection(targetClass = String.class)
+	@ElementCollection(fetch = FetchType.EAGER)
 	@Column(name = "CATEGORIES")
 	private List<String> categories;
-	@ElementCollection
+	@OneToMany(cascade = CascadeType.ALL)
 	@Column(name = "INDICATIONS")
 	private List<Indication> indications;
-	@ElementCollection
+	@OneToMany(cascade = CascadeType.ALL)
 	@Column(name = "MODIFICATIONS")
 	private List<FailureCauseModification> modifications;
 
