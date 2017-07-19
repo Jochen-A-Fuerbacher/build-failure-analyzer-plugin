@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.Collection;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -159,6 +160,26 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		this.successfulLogging = successfulLogging;
 	}
 
+    @Override
+	public Date getLatestFailureForCause(String id) {
+        final EntityManager manager = beginTransaction();
+        final TypedQuery<Date> query = manager.createQuery("SELECT MAX(s.startingTime) FROM Statistics s "
+        		+ "JOIN s.failureCauseStatisticsList fcs WHERE fcs.id = :id", Date.class);
+        query.setParameter("id", id);
+		final Date latest = query.getSingleResult();
+		endTransaction(manager);
+    	return latest;
+    }
+
+    @Override
+	public void updateLastSeen(List<String> ids, Date seen) {
+        for (final String id : ids) {
+        	final FailureCause f = getCause(id);
+        	f.setLastOccurred(seen);
+        	saveCause(f);
+        }
+    }
+
 	@Override
 	public Descriptor<KnowledgeBase> getDescriptor() {
 		return Jenkins.getInstance()
@@ -168,13 +189,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
 		final EntityManager manager = beginTransaction();
-		final List<FailureCause> causes = manager.createQuery("select f from FailureCause f", FailureCause.class)
+		final List<FailureCause> causes = manager
+				.createQuery("select f from FailureCause f", FailureCause.class)
 				.getResultList();
 		for (final FailureCause f : causes) {
 			loadLazyCollections(f);
 		}
 		endTransaction(manager);
-
 		return causes;
 	}
 
@@ -200,7 +221,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public FailureCause getCause(String id) throws Exception {
+	public FailureCause getCause(String id) {
 		final EntityManager manager = beginTransaction();
 		final String sql = "select f from FailureCause f where f.id=:id";
 		final TypedQuery<FailureCause> query = manager.createQuery(sql, FailureCause.class);
@@ -224,7 +245,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public FailureCause addCause(FailureCause cause) throws Exception {
+	public FailureCause addCause(FailureCause cause) {
 		persist(cause);
 		logger.info("Added failure cause '" + cause.getName() + "' with id " + cause.getId());
 		return getCause(cause.getId());
@@ -246,7 +267,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public FailureCause saveCause(FailureCause cause) throws Exception {
+	public FailureCause saveCause(FailureCause cause) {
 		if (getCause(cause.getId()) == null) {
 			logger.log(Level.WARNING, "Failure cause with id " + cause.getId()
 					+ " not available in database. Persisting it.");
