@@ -12,9 +12,10 @@ import org.hibernate.tool.schema.TargetType;
 
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification;
-import com.sonyericsson.jenkins.plugins.bfa.model.indication.BuildLogIndication;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.Indication;
-import com.sonyericsson.jenkins.plugins.bfa.model.indication.MultilineBuildLogIndication;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
 
 /**
  * @author rlamberti
@@ -28,9 +29,9 @@ public class SQLSchemaCreator {
 		final StandardServiceRegistry sr = new StandardServiceRegistryBuilder()
 				.applySetting("hibernate.dialect", "org.hibernate.dialect.MySQL5Dialect").build();
 		final Metadata m = new MetadataSources(sr).addAnnotatedClass(FailureCause.class)
-				.addAnnotatedClass(BuildLogIndication.class).addAnnotatedClass(MultilineBuildLogIndication.class)
 				.addAnnotatedClass(Indication.class).addAnnotatedClass(FailureCauseModification.class)
-				.buildMetadata();
+				.addAnnotatedClass(Statistics.class).addAnnotatedClass(FailureCauseStatistics.class)
+				.addAnnotatedClass(FoundIndication.class).buildMetadata();
 		export.execute(EnumSet.of(TargetType.SCRIPT, TargetType.STDOUT), Action.CREATE, m);
 	}
 }

@@ -39,6 +39,7 @@ import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.UpstreamCause;
 import com.sonyericsson.jenkins.plugins.bfa.utils.BfaUtils;
 import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
 import hudson.Extension;
@@ -477,7 +478,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
         DBObject cause = null;
         if (stat.getUpstreamCause() != null) {
             cause = new BasicDBObject();
-            Statistics.UpstreamCause upstreamCause = stat.getUpstreamCause();
+            UpstreamCause upstreamCause = stat.getUpstreamCause();
             cause.put("project", upstreamCause.getUpstreamProject());
             cause.put("build", upstreamCause.getUpstreamBuild());
         }

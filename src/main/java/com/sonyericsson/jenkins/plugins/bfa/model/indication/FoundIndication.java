@@ -24,18 +24,26 @@
 
 package com.sonyericsson.jenkins.plugins.bfa.model.indication;
 
-import com.sonyericsson.jenkins.plugins.bfa.utils.OldDataConverter;
+import static java.lang.Math.max;
 
 import java.util.List;
+import java.util.Scanner;
+import java.util.regex.Pattern;
 
-import hudson.model.Run;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.Transient;
+
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonProperty;
 
-import static java.lang.Math.max;
-import java.util.Scanner;
-import java.util.regex.Pattern;
+import com.sonyericsson.jenkins.plugins.bfa.utils.OldDataConverter;
+
+import hudson.model.Run;
 
 /**
  * Found Indication of an unsuccessful build.
@@ -43,12 +51,19 @@ import java.util.regex.Pattern;
  * @author Tomas Westling &lt;tomas.westling@sonymobile.com&gt;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Entity
 public class FoundIndication {
+	/**
+	 * The platform file encoding. We assume that Jenkins uses it when writing the logs.
+	 */
+	protected static final String FILE_ENCODING = System.getProperty("file.encoding");
 
-    /**
-     * The platform file encoding. We assume that Jenkins uses it when writing the logs.
-     */
-    protected static final String FILE_ENCODING = System.getProperty("file.encoding");
+	@Id
+	@Column(name="ID")
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private long id;
+
+    @Column(name="MATCHINGFILE")
     private String matchingFile;
     /**
      * @deprecated, kept for backwards compatibility.
@@ -56,8 +71,11 @@ public class FoundIndication {
     @Deprecated
     private transient Integer matchingLine;
 
+    @Column(name="PATTERN")
     private String pattern;
+    @Transient
     private Run build;
+    @Column(name="MATCHINGSTRING")
     private String matchingString;
 
     /**
@@ -90,6 +108,12 @@ public class FoundIndication {
         this.pattern = pattern;
         this.matchingFile = matchingFile;
         this.matchingString = matchingString;
+    }
+
+    /**
+	 * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
+	 */
+    public FoundIndication() {
     }
 
     /**

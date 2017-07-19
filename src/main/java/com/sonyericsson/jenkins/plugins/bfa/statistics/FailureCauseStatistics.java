@@ -24,16 +24,25 @@
 
 package com.sonyericsson.jenkins.plugins.bfa.statistics;
 
-import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
-import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
-
 import java.util.List;
 
-import net.vz.mongodb.jackson.DBRef;
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToMany;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonProperty;
+
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
+
+import net.vz.mongodb.jackson.DBRef;
 
 /**
  * The FailureCause statistics object.
@@ -41,8 +50,17 @@ import org.codehaus.jackson.annotate.JsonProperty;
  * @author Tomas Westling &lt;tomas.westling@sonymobile.com&gt;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Entity
 public class FailureCauseStatistics {
+	@Id
+	@Column(name="ID")
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private long statisticsId;
+
+	@Column(name="FAILURECAUSEID")
     private String id;
+	@Column(name="FOUNDINDICATIONS")
+	@OneToMany(cascade=CascadeType.ALL, fetch=FetchType.EAGER)
     private List<FoundIndication> foundIndications;
 
     /**
@@ -88,5 +106,11 @@ public class FailureCauseStatistics {
         }
         this.id = failureCause.getId().toString();
         this.foundIndications = indications;
+    }
+
+    /**
+	 * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
+	 */
+    public FailureCauseStatistics() {
     }
 }

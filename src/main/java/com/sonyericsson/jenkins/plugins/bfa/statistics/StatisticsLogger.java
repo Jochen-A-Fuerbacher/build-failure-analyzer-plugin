@@ -144,7 +144,7 @@ public final class StatisticsLogger {
 
             master = BfaUtils.getMasterName();
             Cause.UpstreamCause uc = (Cause.UpstreamCause)build.getCause(Cause.UpstreamCause.class);
-            Statistics.UpstreamCause suc = new Statistics.UpstreamCause(uc);
+            UpstreamCause suc = new UpstreamCause(uc);
             Statistics obj = new Statistics(projectName, buildNumber, displayName, startingTime, duration,
                                             triggerCauses, nodeName, master, timeZoneOffset, result, suc,
                                             failureCauseStatistics);

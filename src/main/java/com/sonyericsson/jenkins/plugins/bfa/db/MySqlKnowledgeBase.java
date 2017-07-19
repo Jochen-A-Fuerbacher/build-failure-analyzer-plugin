@@ -167,15 +167,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
-		final EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
+		final EntityManager manager = beginTransaction();
 		final List<FailureCause> causes = manager.createQuery("select f from FailureCause f", FailureCause.class)
 				.getResultList();
 		for (final FailureCause f : causes) {
 			loadLazyCollections(f);
 		}
-		manager.getTransaction().commit();
-		manager.close();
+		endTransaction(manager);
 
 		return causes;
 	}
@@ -190,22 +188,33 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		return getCauses();
 	}
 
-	@Override
-	public FailureCause getCause(String id) throws Exception {
+	private EntityManager beginTransaction() {
 		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
+		return manager;
+	}
+
+	private void endTransaction(EntityManager manager) {
+		manager.getTransaction().commit();
+		manager.close();
+	}
+
+	@Override
+	public FailureCause getCause(String id) throws Exception {
+		final EntityManager manager = beginTransaction();
 		final String sql = "select f from FailureCause f where f.id=:id";
 		final TypedQuery<FailureCause> query = manager.createQuery(sql, FailureCause.class);
 		query.setParameter("id", id);
 		final List<FailureCause> causes = query.getResultList();
-		if (causes.size() != 1) {
-			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
+		if (causes.isEmpty()) {
 			return null;
+		}
+		if (causes.size() > 1) {
+			logger.log(Level.WARNING, "Multiple failure causes with id " + id);
 		}
 		final FailureCause cause = causes.get(0);
 		loadLazyCollections(cause);
-		manager.getTransaction().commit();
-		manager.close();
+		endTransaction(manager);
 		return cause;
 	}
 
@@ -216,13 +225,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public FailureCause addCause(FailureCause cause) throws Exception {
-		final String id = cause.getId();
-		final EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		manager.persist(cause);
-		manager.getTransaction().commit();
-		manager.close();
-
+		persist(cause);
+		logger.info("Added failure cause '" + cause.getName() + "' with id " + cause.getId());
 		return getCause(cause.getId());
 	}
 
@@ -234,42 +238,52 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 					"Cannot remove failure cause with id " + id);
 			return null;
 		}
-		final EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
-		manager.remove(manager.contains(cause)?cause:manager.merge(cause));
-		manager.getTransaction().commit();
-		manager.close();
-
+		final EntityManager manager = beginTransaction();
+		manager.remove(manager.contains(cause) ? cause : manager.merge(cause));
+		endTransaction(manager);
+		logger.info("Removed failure cause '" + cause.getName() + "' with id " + cause.getId());
 		return cause;
 	}
 
 	@Override
 	public FailureCause saveCause(FailureCause cause) throws Exception {
-		final EntityManager manager = entityManagerFactory.createEntityManager();
-		manager.getTransaction().begin();
 		if (getCause(cause.getId()) == null) {
-			logger.log(Level.WARNING,
-					"Cannot save failure cause with id " + cause.getId()
-							+ ": \n"
-							+ "Failure cause not available in database.");
-			return cause;
+			logger.log(Level.WARNING, "Failure cause with id " + cause.getId()
+					+ " not available in database. Persisting it.");
+			return addCause(cause);
 		}
+		final EntityManager manager = beginTransaction();
 		final FailureCause merged = manager.merge(cause);
-		manager.getTransaction().commit();
-		manager.close();
+		endTransaction(manager);
+		logger.info("Updated failure cause '" + merged.getName() + "' with id " + merged.getId());
 		return merged;
 	}
 
 	@Override
 	public void convertFrom(KnowledgeBase oldKnowledgeBase) throws Exception {
-		// TODO Auto-generated method stub
-
+		if (!equals(oldKnowledgeBase)) {
+			if (oldKnowledgeBase instanceof MongoDBKnowledgeBase) {
+				convertFromAbstract(oldKnowledgeBase);
+			} else {
+				final Collection<FailureCause> fcs = oldKnowledgeBase.getCauseNames();
+				logger.info("Converting " + fcs.size() + " FailureCauses to SQLKnowledge base.");
+				for (final FailureCause cause : fcs) {
+					// try finding the id in the knowledgebase, if so, update it.
+					if (getCause(cause.getId()) != null) {
+						saveCause(cause);
+						// if not found, add a new.
+					} else {
+						cause.setId(null);
+						addCause(cause);
+					}
+				}
+			}
+		}
 	}
 
 	@Override
 	public List<String> getCategories() throws Exception {
 		final List<String> categories = new LinkedList<String>();
-
 		final Collection<FailureCause> causes = getCauses();
 		for (final FailureCause cause : causes) {
 			for (final String category : cause.getCategories()) {
@@ -278,13 +292,55 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				}
 			}
 		}
-
 		return categories;
 	}
 
 	@Override
 	public boolean equals(KnowledgeBase oldKnowledgeBase) {
-		// TODO Auto-generated method stub
+		if (this == oldKnowledgeBase) {
+			return true;
+		}
+		if (getClass().isInstance(oldKnowledgeBase)) {
+			final MySqlKnowledgeBase other = (MySqlKnowledgeBase) oldKnowledgeBase;
+			if (dbName == null) {
+				if (other.dbName != null) {
+					return false;
+				}
+			} else if (!dbName.equals(other.dbName)) {
+				return false;
+			}
+			if (enableStatistics != other.enableStatistics) {
+				return false;
+			}
+			if (host == null) {
+				if (other.host != null) {
+					return false;
+				}
+			} else if (!host.equals(other.host)) {
+				return false;
+			}
+			if (password == null) {
+				if (other.password != null) {
+					return false;
+				}
+			} else if (!password.equals(other.password)) {
+				return false;
+			}
+			if (port != other.port) {
+				return false;
+			}
+			if (successfulLogging != other.successfulLogging) {
+				return false;
+			}
+			if (userName == null) {
+				if (other.userName != null) {
+					return false;
+				}
+			} else if (!userName.equals(other.userName)) {
+				return false;
+			}
+			return true;
+		}
 		return false;
 	}
 
@@ -321,8 +377,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void saveStatistics(Statistics stat) throws Exception {
-		// TODO Auto-generated method stub
+		persist(stat);
+	}
 
+	private void persist(Object entity) {
+		final EntityManager manager = beginTransaction();
+		manager.persist(entity);
+		endTransaction(manager);
 	}
 
 	/**

@@ -28,6 +28,7 @@ import java.io.Serializable;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
@@ -60,6 +61,7 @@ import hudson.util.FormValidation;
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)
 public abstract class Indication implements Describable<Indication>, Serializable {
 	@Id
+	@Column(name="ID")
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private long id;
 

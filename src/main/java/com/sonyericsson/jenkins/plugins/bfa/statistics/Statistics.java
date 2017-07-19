@@ -27,7 +27,18 @@ package com.sonyericsson.jenkins.plugins.bfa.statistics;
 import java.util.Date;
 import java.util.List;
 
-import hudson.model.Cause;
+import javax.persistence.CascadeType;
+import javax.persistence.Column;
+import javax.persistence.ElementCollection;
+import javax.persistence.Entity;
+import javax.persistence.FetchType;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToMany;
+import javax.persistence.Temporal;
+import javax.persistence.TemporalType;
+
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonProperty;
@@ -37,19 +48,39 @@ import org.codehaus.jackson.annotate.JsonProperty;
  * @author Tomas Westling &lt;tomas.westling@sonymobile.com&gt;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
+@Entity
 public class Statistics {
 
+	@Id
+	@Column(name="ID")
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private long id;
+
+	@Column(name="PROJECTNAME")
     private String projectName;
+	@Column(name="BUILDNUMBER")
     private int buildNumber;
+	@Column(name="DISPLAYNAME")
     private String displayName;
+	@Column(name="STARTINGTIME")
+	@Temporal(TemporalType.TIMESTAMP)
     private Date startingTime;
+	@Column(name="DURATION")
     private long duration;
+	@Column(name="TRIGGERCAUSES")
+	@ElementCollection(fetch = FetchType.EAGER)
     private List<String> triggerCauses;
+	@Column(name="SLAVE")
     private String slave;
+	@Column(name="MASTER")
     private String master;
+	@Column(name="TIMEZONEOFFSET")
     private int timeZoneOffset;
+	@Column(name="RESULT")
     private String result;
+	@Column(name="UPSTREAMCAUSE")
     private UpstreamCause upstreamCause;
+	@OneToMany(cascade = CascadeType.ALL)
     private List<FailureCauseStatistics> failureCauseStatisticsList;
 
     /**
@@ -226,69 +257,8 @@ public class Statistics {
     }
 
     /**
-     * Upstream cause.
-     */
-    public static class UpstreamCause {
-
-        private String project;
-        private int build;
-
-        /**
-         * JSON constructor.
-         *
-         * @param project Upstream build project.
-         * @param build Upstream build number.
-         */
-        @JsonCreator
-        public UpstreamCause(@JsonProperty("project") String project, @JsonProperty("build") int build) {
-            this.project = project;
-            this.build = build;
-        }
-
-        /**
-         * Constructor for Cause.UpstreamCause.
-         * @param upstreamCause The Cause to copy.
-         */
-        public UpstreamCause(Cause.UpstreamCause upstreamCause) {
-            if (upstreamCause == null) {
-                this.project = "";
-                this.build = 0;
-            } else {
-                this.project = upstreamCause.getUpstreamProject();
-                this.build = upstreamCause.getUpstreamBuild();
-            }
-        }
-
-        /**
-         * Getter for the upstream build project.
-         * @return the upstream build project.
-         */
-        public String getUpstreamProject() {
-            return project;
-        }
-
-        /**
-         * Setter for the upstream build project.
-         * @param p The project to set.
-         */
-        public void setUpstreamProject(String p) {
-            this.project = p;
-        }
-
-        /**
-         * Getter for the upstream build number.
-         * @return the upstream build number.
-         */
-        public int getUpstreamBuild() {
-            return build;
-        }
-
-        /**
-         * Setter for the upstream build number.
-         * @param buildNr The project build to set.
-         */
-        public void setUpstreamBuild(int buildNr) {
-            this.build = buildNr;
-        }
+	 * Default constructor. <strong>Do not use this unless you are a serializer.</strong>
+	 */
+    public Statistics() {
     }
 }

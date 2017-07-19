@@ -30,7 +30,7 @@ import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
-import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics.UpstreamCause;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.UpstreamCause;
 import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
 import org.jfree.data.time.Day;
 import org.jfree.data.time.Hour;
@@ -271,13 +271,13 @@ public class EmbeddedMongoStatisticsTest extends EmbeddedMongoTest {
      */
     @Test
     public void testStatisticsWithUpstreamCauses() throws Exception {
-        Statistics.UpstreamCause uc = new UpstreamCause(PROJECT_B, BUILD_NR);
+        UpstreamCause uc = new UpstreamCause(PROJECT_B, BUILD_NR);
         Statistics s = new Statistics(PROJECT_A, 1, null, null, 1L, null, null, MASTER_A, 0, UNSTABLE, uc, null);
         knowledgeBase.saveStatistics(s);
         List<Statistics> fetchedStatistics = knowledgeBase.getStatistics(null, -1);
         assertNotNull("The fetched statistics should not be null", fetchedStatistics);
         assertFalse("The fetched statistics list should not be empty", fetchedStatistics.isEmpty());
-        Statistics.UpstreamCause fetchedUC = fetchedStatistics.get(0).getUpstreamCause();
+        UpstreamCause fetchedUC = fetchedStatistics.get(0).getUpstreamCause();
         assertEquals(fetchedUC.getUpstreamBuild(), uc.getUpstreamBuild());
         assertEquals(fetchedUC.getUpstreamProject(), uc.getUpstreamProject());
     }
@@ -294,7 +294,7 @@ public class EmbeddedMongoStatisticsTest extends EmbeddedMongoTest {
         List<Statistics> fetchedStatistics = knowledgeBase.getStatistics(null, -1);
         assertNotNull("The fetched statistics should not be null", fetchedStatistics);
         assertFalse("The fetched statistics list should not be empty", fetchedStatistics.isEmpty());
-        Statistics.UpstreamCause fetchedUC = fetchedStatistics.get(0).getUpstreamCause();
+        UpstreamCause fetchedUC = fetchedStatistics.get(0).getUpstreamCause();
         assertTrue("The fetched upstream cause should be null", fetchedUC == null);
     }
 
