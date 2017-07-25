@@ -26,10 +26,16 @@ package com.sonyericsson.jenkins.plugins.bfa.db;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -38,15 +44,28 @@ import java.util.regex.Pattern;
 
 import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
+import javax.persistence.Tuple;
 import javax.persistence.TypedQuery;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Expression;
+import javax.persistence.criteria.ListJoin;
+import javax.persistence.criteria.Path;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
 
 import org.hibernate.jpa.HibernatePersistenceProvider;
+import org.jfree.data.time.TimePeriod;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 
 import com.sonyericsson.jenkins.plugins.bfa.Messages;
+import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
+import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
+import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
 
 import hudson.Extension;
 import hudson.Util;
@@ -160,25 +179,43 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		this.successfulLogging = successfulLogging;
 	}
 
-    @Override
+	@Override
 	public Date getLatestFailureForCause(String id) {
-        final EntityManager manager = beginTransaction();
-        final TypedQuery<Date> query = manager.createQuery("SELECT MAX(s.startingTime) FROM Statistics s "
-        		+ "JOIN s.failureCauseStatisticsList fcs WHERE fcs.id = :id", Date.class);
-        query.setParameter("id", id);
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<Date> q = c.createQuery(Date.class);
+		final Root<Statistics> s = q.from(Statistics.class);
+		final ListJoin<Object, Object> join = s.joinList("failureCauseStatisticsList");
+		final Path<Object> fcId = join.get("id");
+		final Path<Date> startingTime = join.<Date> get("startingTime");
+		final TypedQuery<Date> query = manager.createQuery(q.select(c.greatest(startingTime)).where(c.equal(fcId, id)));
 		final Date latest = query.getSingleResult();
 		endTransaction(manager);
-    	return latest;
-    }
+		return latest;
+	}
 
-    @Override
+	@Override
 	public void updateLastSeen(List<String> ids, Date seen) {
-        for (final String id : ids) {
-        	final FailureCause f = getCause(id);
-        	f.setLastOccurred(seen);
-        	saveCause(f);
-        }
-    }
+		for (final String id : ids) {
+			final FailureCause f = getCause(id);
+			f.setLastOccurred(seen);
+			saveCause(f);
+		}
+	}
+
+	@Override
+	public Date getCreationDateForCause(String id) {
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<Date> q = c.createQuery(Date.class);
+		final Root<FailureCause> fc = q.from(FailureCause.class);
+		final Path<Date> time = fc.joinList("modifications").<Date> get("time");
+		final TypedQuery<Date> query = manager.createQuery(q.select(c.least(time))
+				.where(c.equal(fc.get("id"), id)));
+		final Date created = query.getSingleResult();
+		endTransaction(manager);
+		return created;
+	}
 
 	@Override
 	public Descriptor<KnowledgeBase> getDescriptor() {
@@ -189,8 +226,11 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
 		final EntityManager manager = beginTransaction();
+
+		final CriteriaQuery<FailureCause> query = manager.getCriteriaBuilder().createQuery(FailureCause.class);
+
 		final List<FailureCause> causes = manager
-				.createQuery("select f from FailureCause f", FailureCause.class)
+				.createQuery(query.select(query.from(FailureCause.class)))
 				.getResultList();
 		for (final FailureCause f : causes) {
 			loadLazyCollections(f);
@@ -223,9 +263,12 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public FailureCause getCause(String id) {
 		final EntityManager manager = beginTransaction();
-		final String sql = "select f from FailureCause f where f.id=:id";
-		final TypedQuery<FailureCause> query = manager.createQuery(sql, FailureCause.class);
-		query.setParameter("id", id);
+
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<FailureCause> cquery = c.createQuery(FailureCause.class);
+		final Root<FailureCause> f = cquery.from(FailureCause.class);
+
+		final TypedQuery<FailureCause> query = manager.createQuery(cquery.where(c.equal(f.get("id"), id)));
 		final List<FailureCause> causes = query.getResultList();
 		if (causes.isEmpty()) {
 			return null;
@@ -382,8 +425,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 			// provider can't be found with Persistence.createEntityManagerFactory because of
 			// packing. use hibernate directly.
-			entityManagerFactory = new HibernatePersistenceProvider().createEntityManagerFactory("bfa",
-					eProps);
+			entityManagerFactory = new HibernatePersistenceProvider()
+					.createEntityManagerFactory("bfa", eProps);
 		} catch (final Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
@@ -394,6 +437,214 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		if (entityManagerFactory != null && entityManagerFactory.isOpen()) {
 			entityManagerFactory.close();
 		}
+	}
+
+	private <T> CriteriaQuery<T> getQuery(CriteriaQuery<T> q, EntityManager m, GraphFilterBuilder filter) {
+		final CriteriaBuilder c = m.getCriteriaBuilder();
+		final Root<Statistics> r = q.from(Statistics.class);
+		final List<Predicate> restrictions = new ArrayList<Predicate>(7);
+		addEqualFilter(c, r, restrictions, "master", filter.getMasterName());
+		addEqualFilter(c, r, restrictions, "slave", filter.getSlaveName());
+		addEqualFilter(c, r, restrictions, "projectName", filter.getProjectName());
+		addEqualFilter(c, r, restrictions, "result", filter.getResult());
+		if (filter.getBuildNumbers() != null && !filter.getBuildNumbers().isEmpty()) {
+			restrictions.add(c.in(r.get("buildNumber")).in(filter.getBuildNumbers()));
+		}
+		if (filter.getExcludeResult() != null) {
+			restrictions.add(c.notEqual(r.get("result"), filter.getExcludeResult()));
+		}
+		if (filter.getSince() != null) {
+			restrictions.add(c.greaterThanOrEqualTo(r.<Date> get("startingTime"), filter.getSince()));
+		}
+		final Predicate[] array = restrictions.toArray(new Predicate[restrictions.size()]);
+		return q.where(c.and(array));
+	}
+
+	private <T> void addEqualFilter(CriteriaBuilder c, Root<?> r, Collection<Predicate> restrictions, String name,
+			T criteria) {
+		if (criteria != null) {
+			restrictions.add(c.equal(r.<T> get(name), criteria));
+		}
+	}
+
+	/**
+	 * @param limit
+	 * @param tq
+	 */
+	private void addLimit(int limit, final TypedQuery<?> tq) {
+		if (limit > 0) {
+			tq.setMaxResults(limit);
+		}
+	}
+
+	@Override
+	public List<Statistics> getStatistics(GraphFilterBuilder filter, int limit) {
+		final EntityManager manager = beginTransaction();
+		final TypedQuery<Statistics> tq = getStatisticsQuery(manager, filter);
+		addLimit(limit, tq);
+		final List<Statistics> result = tq.getResultList();
+		endTransaction(manager);
+		return result;
+	}
+
+	private TypedQuery<Statistics> getStatisticsQuery(EntityManager manager, GraphFilterBuilder filter) {
+		final CriteriaQuery<Statistics> q = manager.getCriteriaBuilder().createQuery(Statistics.class);
+		final CriteriaQuery<Statistics> query = getQuery(q, manager, filter);
+		return manager.createQuery(query);
+	}
+
+	@Override
+	public List<ObjectCountPair<FailureCause>> getNbrOfFailureCauses(GraphFilterBuilder filter) {
+		return getNbrOfFailureCauses(filter, 0);
+	}
+
+	public List<ObjectCountPair<FailureCause>> getNbrOfFailureCauses(GraphFilterBuilder filter, int limit) {
+		final List<ObjectCountPair<String>> fcsPerId = getNbrOfFailureCausesPerId(filter, limit);
+
+		// get FailureCauses corresponding to found ids
+		final Collection<String> ids = new ArrayList<String>(fcsPerId.size());
+		for (final ObjectCountPair<String> t : fcsPerId) {
+			ids.add(t.getObject());
+		}
+
+		final Map<String, FailureCause> fcs = getFailureCauses(ids);
+
+		// build result list with FailureCauses and counts
+		final List<ObjectCountPair<FailureCause>> list = new ArrayList<ObjectCountPair<FailureCause>>(fcsPerId.size());
+		for (final ObjectCountPair<String> t : fcsPerId) {
+			list.add(new ObjectCountPair<FailureCause>(fcs.get(t.getObject()), t.getCount()));
+		}
+		return list;
+	}
+
+	/**
+	 * @param ids
+	 * @return
+	 */
+	private Map<String, FailureCause> getFailureCauses(final Collection<String> ids) {
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<FailureCause> fq = c.createQuery(FailureCause.class);
+		final Root<FailureCause> rf = fq.from(FailureCause.class);
+
+		final Map<String, FailureCause> fcs = new HashMap<String, FailureCause>();
+		for (final FailureCause f : manager.createQuery(fq.where(rf.in(ids))).getResultList()) {
+			fcs.put(f.getId(), f);
+		}
+		endTransaction(manager);
+		return fcs;
+	}
+
+	@Override
+	public List<ObjectCountPair<String>> getNbrOfFailureCausesPerId(GraphFilterBuilder filter, int limit) {
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		CriteriaQuery<Tuple> q = getQuery(c.createTupleQuery(), manager, filter);
+		// build the selections
+		final Root<Statistics> s = q.from(Statistics.class);
+		final Expression<Object> fc = s.joinList("failureCauseStatisticsList").get("id");
+		final Expression<Long> count = c.count(s);
+		q = q.multiselect(fc.alias("failureCause"), count.alias("count")).groupBy(fc).orderBy(c.desc(count));
+		final TypedQuery<Tuple> tq = manager.createQuery(q);
+		addLimit(limit, tq);
+		final List<Tuple> counts = tq.getResultList();
+
+		endTransaction(manager);
+
+		// build result list with FailureCauses and counts
+		final List<ObjectCountPair<String>> list = new ArrayList<ObjectCountPair<String>>(counts.size());
+		for (final Tuple t : counts) {
+			list.add(new ObjectCountPair<String>(t.get("failureCause", String.class), t.get("count", Integer.class)));
+		}
+		return list;
+	}
+
+	@Override
+	public List<ObjectCountPair<String>> getFailureCauseNames(GraphFilterBuilder filter) {
+		final List<ObjectCountPair<FailureCause>> fcs = getNbrOfFailureCauses(filter);
+
+		final List<ObjectCountPair<String>> result = new ArrayList<ObjectCountPair<String>>();
+		for (final ObjectCountPair<FailureCause> f : fcs) {
+			result.add(new ObjectCountPair<String>(f.getObject().getName(), f.getCount()));
+		}
+		return result;
+	}
+
+	@Override
+	public long getNbrOfNullFailureCauses(GraphFilterBuilder filter) {
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<Long> query = getQuery(c.createQuery(Long.class), manager, filter);
+		final Predicate size = c.equal(c.size(query.from(Statistics.class)
+				.<List<FailureCauseStatistics>> get("failureCauseStatisticsList")), 0);
+		final Predicate where = query.getRestriction() == null ? size : c.and(query.getRestriction(), size);
+		return manager.createQuery(query.select(c.count(query.from(Statistics.class)))
+				.where(where)).getSingleResult();
+	}
+
+	@Override
+	public List<ObjectCountPair<String>> getNbrOfFailureCategoriesPerName(GraphFilterBuilder filter, int limit) {
+		final List<ObjectCountPair<FailureCause>> fcs = getNbrOfFailureCauses(filter, limit);
+		final Map<String, ObjectCountPair<String>> counts = new HashMap<String, ObjectCountPair<String>>();
+		for (final ObjectCountPair<FailureCause> fc : fcs) {
+			for (final String c : fc.getObject().getCategories()) {
+				if (!counts.containsKey(c)) {
+					counts.put(c, new ObjectCountPair<String>(c, 0));
+				}
+				counts.get(c).addCount(1);
+			}
+		}
+		final List<ObjectCountPair<String>> result = new ArrayList<ObjectCountPair<String>>(counts.values());
+		final Comparator<ObjectCountPair<?>> comparator = Collections
+				.reverseOrder(new Comparator<ObjectCountPair<?>>() {
+					@Override
+					public int compare(ObjectCountPair<?> o1, ObjectCountPair<?> o2) {
+						return Integer.compare(o1.getCount(), o2.getCount());
+					}
+				});
+		Collections.sort(result, comparator);
+		return result;
+	}
+
+	@Override
+	public Map<Integer, List<FailureCause>> getFailureCausesPerBuild(GraphFilterBuilder filter) {
+		final EntityManager manager = beginTransaction();
+		final TypedQuery<Statistics> q = getStatisticsQuery(manager, filter);
+		final List<Statistics> stats = q.getResultList();
+
+		final Collection<String> ids = new HashSet<String>();
+		for (final Statistics s : stats) {
+			for (final FailureCauseStatistics f : s.getFailureCauseStatisticsList()) {
+				ids.add(f.getId());
+			}
+		}
+		final Map<String, FailureCause> fcs = getFailureCauses(ids);
+
+		final Map<Integer, List<FailureCause>> result = new HashMap<Integer, List<FailureCause>>();
+		for (final Statistics s : stats) {
+			final Integer build = s.getBuildNumber();
+			if (!result.containsKey(build)) {
+				result.put(build, new ArrayList<FailureCause>());
+			}
+			for (final FailureCauseStatistics f : s.getFailureCauseStatisticsList()) {
+				result.get(build).add(fcs.get(f.getId()));
+			}
+		}
+		endTransaction(manager);
+		return result;
+	}
+
+	@Override
+	public Map<TimePeriod, Double> getUnknownFailureCauseQuotaPerTime(int intervalSize, GraphFilterBuilder filter) {
+		// TODO Auto-generated method stub
+		return super.getUnknownFailureCauseQuotaPerTime(intervalSize, filter);
+	}
+
+	@Override
+	public List<FailureCauseTimeInterval> getFailureCausesPerTime(int intervalSize, GraphFilterBuilder filter,
+			boolean byCategories) {
+		// TODO Auto-generated method stub
+		return super.getFailureCausesPerTime(intervalSize, filter, byCategories);
 	}
 
 	@Override
