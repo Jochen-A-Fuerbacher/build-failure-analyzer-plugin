@@ -148,6 +148,11 @@
 			<artifactId>hibernate-jpa-2.1-api</artifactId>
 			<version>1.0.0.Final</version>
 		</dependency>
+		<dependency>
+			<groupId>org.hibernate</groupId>
+			<artifactId>hibernate-jpamodelgen</artifactId>
+			<version>5.2.10.Final</version>
+		</dependency>
 
 		<dependency>
 			<groupId>mysql</groupId>
@@ -281,7 +286,6 @@
 				<artifactId>maven-checkstyle-plugin</artifactId>
 				<version>${checkstyle.version}</version>
 				<configuration>
-<!-- 					<skip>true</skip> -->
 					<configLocation>swe_checkstyle.xml</configLocation>
 					<suppressionsLocation>checkstyle-suppressions.xml</suppressionsLocation>
 					<suppressionsFileExpression>checkstyle.suppressions.file</suppressionsFileExpression>

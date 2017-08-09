@@ -80,6 +80,7 @@ public class Statistics {
     private String result;
 	@Column(name="UPSTREAMCAUSE")
     private UpstreamCause upstreamCause;
+	@Column(name="FAILURECAUSESTATISTICS")
 	@OneToMany(cascade = CascadeType.ALL)
     private List<FailureCauseStatistics> failureCauseStatisticsList;
 

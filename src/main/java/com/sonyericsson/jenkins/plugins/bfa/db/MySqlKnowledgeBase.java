@@ -27,16 +27,18 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
+import java.util.SimpleTimeZone;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -53,8 +55,14 @@ import javax.persistence.criteria.ListJoin;
 import javax.persistence.criteria.Path;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
+import javax.persistence.criteria.Selection;
+import javax.persistence.metamodel.SingularAttribute;
 
+import org.apache.commons.collections.keyvalue.MultiKey;
 import org.hibernate.jpa.HibernatePersistenceProvider;
+import org.jfree.data.time.Day;
+import org.jfree.data.time.Hour;
+import org.jfree.data.time.Month;
 import org.jfree.data.time.TimePeriod;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
@@ -63,8 +71,12 @@ import com.sonyericsson.jenkins.plugins.bfa.Messages;
 import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
 import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification_;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause_;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics_;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics_;
 import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
 
 import hudson.Extension;
@@ -185,9 +197,9 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 		final CriteriaQuery<Date> q = c.createQuery(Date.class);
 		final Root<Statistics> s = q.from(Statistics.class);
-		final ListJoin<Object, Object> join = s.joinList("failureCauseStatisticsList");
-		final Path<Object> fcId = join.get("id");
-		final Path<Date> startingTime = join.<Date> get("startingTime");
+		final ListJoin<Statistics, FailureCauseStatistics> join = s.join(Statistics_.failureCauseStatisticsList);
+		final Path<String> fcId = join.get(FailureCauseStatistics_.id);
+		final Path<Date> startingTime = s.get(Statistics_.startingTime);
 		final TypedQuery<Date> query = manager.createQuery(q.select(c.greatest(startingTime)).where(c.equal(fcId, id)));
 		final Date latest = query.getSingleResult();
 		endTransaction(manager);
@@ -209,9 +221,9 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 		final CriteriaQuery<Date> q = c.createQuery(Date.class);
 		final Root<FailureCause> fc = q.from(FailureCause.class);
-		final Path<Date> time = fc.joinList("modifications").<Date> get("time");
+		final Path<Date> time = fc.join(FailureCause_.modifications).get(FailureCauseModification_.time);
 		final TypedQuery<Date> query = manager.createQuery(q.select(c.least(time))
-				.where(c.equal(fc.get("id"), id)));
+				.where(c.equal(fc.get(FailureCause_.id), id)));
 		final Date created = query.getSingleResult();
 		endTransaction(manager);
 		return created;
@@ -263,12 +275,11 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	@Override
 	public FailureCause getCause(String id) {
 		final EntityManager manager = beginTransaction();
-
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 		final CriteriaQuery<FailureCause> cquery = c.createQuery(FailureCause.class);
 		final Root<FailureCause> f = cquery.from(FailureCause.class);
 
-		final TypedQuery<FailureCause> query = manager.createQuery(cquery.where(c.equal(f.get("id"), id)));
+		final TypedQuery<FailureCause> query = manager.createQuery(cquery.where(c.equal(f.get(FailureCause_.id), id)));
 		final List<FailureCause> causes = query.getResultList();
 		if (causes.isEmpty()) {
 			return null;
@@ -346,17 +357,16 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public List<String> getCategories() throws Exception {
-		final List<String> categories = new LinkedList<String>();
-		final Collection<FailureCause> causes = getCauses();
-		for (final FailureCause cause : causes) {
-			for (final String category : cause.getCategories()) {
-				if (!categories.contains(category)) {
-					categories.add(category);
-				}
-			}
-		}
-		return categories;
+	public List<String> getCategories() {
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+		final CriteriaQuery<String> cquery = c.createQuery(String.class);
+		final Root<FailureCause> f = cquery.from(FailureCause.class);
+		final TypedQuery<String> query = manager
+				.createQuery(cquery.select(f.join(FailureCause_.categories)).distinct(true));
+		final List<String> result = query.getResultList();
+		endTransaction(manager);
+		return result;
 	}
 
 	@Override
@@ -443,27 +453,27 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final CriteriaBuilder c = m.getCriteriaBuilder();
 		final Root<Statistics> r = q.from(Statistics.class);
 		final List<Predicate> restrictions = new ArrayList<Predicate>(7);
-		addEqualFilter(c, r, restrictions, "master", filter.getMasterName());
-		addEqualFilter(c, r, restrictions, "slave", filter.getSlaveName());
-		addEqualFilter(c, r, restrictions, "projectName", filter.getProjectName());
-		addEqualFilter(c, r, restrictions, "result", filter.getResult());
+		addEqualFilter(c, r, restrictions, Statistics_.master, filter.getMasterName());
+		addEqualFilter(c, r, restrictions, Statistics_.slave, filter.getSlaveName());
+		addEqualFilter(c, r, restrictions, Statistics_.projectName, filter.getProjectName());
+		addEqualFilter(c, r, restrictions, Statistics_.result, filter.getResult());
 		if (filter.getBuildNumbers() != null && !filter.getBuildNumbers().isEmpty()) {
-			restrictions.add(c.in(r.get("buildNumber")).in(filter.getBuildNumbers()));
+			restrictions.add(c.in(r.get(Statistics_.buildNumber)).in(filter.getBuildNumbers()));
 		}
 		if (filter.getExcludeResult() != null) {
-			restrictions.add(c.notEqual(r.get("result"), filter.getExcludeResult()));
+			restrictions.add(c.notEqual(r.get(Statistics_.result), filter.getExcludeResult()));
 		}
 		if (filter.getSince() != null) {
-			restrictions.add(c.greaterThanOrEqualTo(r.<Date> get("startingTime"), filter.getSince()));
+			restrictions.add(c.greaterThanOrEqualTo(r.get(Statistics_.startingTime), filter.getSince()));
 		}
 		final Predicate[] array = restrictions.toArray(new Predicate[restrictions.size()]);
 		return q.where(c.and(array));
 	}
 
-	private <T> void addEqualFilter(CriteriaBuilder c, Root<?> r, Collection<Predicate> restrictions, String name,
-			T criteria) {
+	private <T> void addEqualFilter(CriteriaBuilder c, Root<Statistics> r, Collection<Predicate> restrictions,
+			SingularAttribute<Statistics, T> attribute, T criteria) {
 		if (criteria != null) {
-			restrictions.add(c.equal(r.<T> get(name), criteria));
+			restrictions.add(c.equal(r.get(attribute), criteria));
 		}
 	}
 
@@ -528,7 +538,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final Root<FailureCause> rf = fq.from(FailureCause.class);
 
 		final Map<String, FailureCause> fcs = new HashMap<String, FailureCause>();
-		for (final FailureCause f : manager.createQuery(fq.where(rf.in(ids))).getResultList()) {
+		for (final FailureCause f : manager.createQuery(fq.where(rf.get(FailureCause_.id).in(ids))).getResultList()) {
 			fcs.put(f.getId(), f);
 		}
 		endTransaction(manager);
@@ -542,7 +552,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		CriteriaQuery<Tuple> q = getQuery(c.createTupleQuery(), manager, filter);
 		// build the selections
 		final Root<Statistics> s = q.from(Statistics.class);
-		final Expression<Object> fc = s.joinList("failureCauseStatisticsList").get("id");
+		final Expression<String> fc = s.join(Statistics_.failureCauseStatisticsList).get(FailureCauseStatistics_.id);
 		final Expression<Long> count = c.count(s);
 		q = q.multiselect(fc.alias("failureCause"), count.alias("count")).groupBy(fc).orderBy(c.desc(count));
 		final TypedQuery<Tuple> tq = manager.createQuery(q);
@@ -554,7 +564,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		// build result list with FailureCauses and counts
 		final List<ObjectCountPair<String>> list = new ArrayList<ObjectCountPair<String>>(counts.size());
 		for (final Tuple t : counts) {
-			list.add(new ObjectCountPair<String>(t.get("failureCause", String.class), t.get("count", Integer.class)));
+			list.add(new ObjectCountPair<String>(t.get("failureCause", String.class),
+					t.get("count", Long.class).intValue()));
 		}
 		return list;
 	}
@@ -575,11 +586,21 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 		final CriteriaQuery<Long> query = getQuery(c.createQuery(Long.class), manager, filter);
-		final Predicate size = c.equal(c.size(query.from(Statistics.class)
-				.<List<FailureCauseStatistics>> get("failureCauseStatisticsList")), 0);
+		final Predicate size = getNullFailureCauses(c, query);
 		final Predicate where = query.getRestriction() == null ? size : c.and(query.getRestriction(), size);
 		return manager.createQuery(query.select(c.count(query.from(Statistics.class)))
 				.where(where)).getSingleResult();
+	}
+
+	/**
+	 * @param c
+	 * @param query
+	 * @return
+	 */
+	private Predicate getNullFailureCauses(final CriteriaBuilder c, final CriteriaQuery<?> query) {
+		final Expression<List<FailureCauseStatistics>> list = query.from(Statistics.class)
+				.get(Statistics_.failureCauseStatisticsList);
+		return c.equal(c.size(list), 0);
 	}
 
 	@Override
@@ -636,15 +657,196 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Map<TimePeriod, Double> getUnknownFailureCauseQuotaPerTime(int intervalSize, GraphFilterBuilder filter) {
-		// TODO Auto-generated method stub
-		return super.getUnknownFailureCauseQuotaPerTime(intervalSize, filter);
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+
+		final CriteriaQuery<Tuple> q1 = getQuery(c.createTupleQuery(), manager, filter);
+		final Map<TimePeriod, Integer> unknown = getFailedStatistics(manager, q1, getNullFailureCauses(c, q1),
+				intervalSize);
+		final CriteriaQuery<Tuple> q2 = getQuery(c.createTupleQuery(), manager, filter);
+		final Map<TimePeriod, Integer> known = getFailedStatistics(manager, q2, c.not(getNullFailureCauses(c, q2)),
+				intervalSize);
+
+		final Set<TimePeriod> periods = new HashSet<TimePeriod>(unknown.keySet());
+		periods.addAll(known.keySet());
+
+		final Map<TimePeriod, Double> nullFailureCauseQuotas = new HashMap<TimePeriod, Double>();
+		for (final TimePeriod t : periods) {
+			final int unknownCount = unknown.containsKey(t) ? unknown.get(t) : 0;
+			final int knownCount = known.containsKey(t) ? known.get(t) : 0;
+			double quota;
+			if (unknownCount == 0) {
+				quota = 0d;
+			} else {
+				quota = ((double) unknownCount) / (unknownCount + knownCount);
+			}
+			nullFailureCauseQuotas.put(t, quota);
+		}
+		return nullFailureCauseQuotas;
+	}
+
+	/**
+	 * Generates a {@link TimePeriod} based on a MongoDB grouping aggregation result.
+	 *
+	 * @param result
+	 *            the result to interpret
+	 * @param intervalSize
+	 *            the interval size, should be set to Calendar.HOUR_OF_DAY, Calendar.DATE or
+	 *            Calendar.MONTH.
+	 * @return TimePeriod
+	 */
+	private TimePeriod generateTimePeriodFromResult(Tuple result, int intervalSize) {
+		final int month = result.get("month", Integer.class);
+		final int year = result.get("year", Integer.class);
+
+		final Calendar c = Calendar.getInstance();
+		c.set(Calendar.YEAR, year);
+		c.set(Calendar.MONTH, month - 1);
+		// MongoDB timezone is UTC:
+		c.setTimeZone(new SimpleTimeZone(0, "UTC"));
+
+		TimePeriod period;
+		if (intervalSize == Calendar.HOUR_OF_DAY) {
+			final int dayOfMonth = result.get("day", Integer.class);
+			c.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+			final int hour = result.get("hour", Integer.class);
+			c.set(Calendar.HOUR_OF_DAY, hour);
+
+			period = new Hour(c.getTime());
+		} else if (intervalSize == Calendar.DATE) {
+			final int dayOfMonth = result.get("day", Integer.class);
+			c.set(Calendar.DAY_OF_MONTH, dayOfMonth);
+
+			period = new Day(c.getTime());
+		} else {
+			period = new Month(c.getTime());
+		}
+		return period;
+	}
+
+	private Map<TimePeriod, Integer> generateTimePeriods(List<Tuple> result, int intervalSize) {
+		final Map<TimePeriod, Integer> map = new HashMap<TimePeriod, Integer>();
+		for (final Tuple t : result) {
+			map.put(generateTimePeriodFromResult(t, intervalSize), t.get("count", Long.class).intValue());
+		}
+		return map;
+	}
+
+	/**
+	 *
+	 * @param manager
+	 * @param q
+	 * @param p
+	 * @param intervalSize
+	 * @return
+	 */
+	private Map<TimePeriod, Integer> getFailedStatistics(EntityManager manager, CriteriaQuery<Tuple> q, Predicate p,
+			int intervalSize) {
+		final List<Selection<?>> select = new ArrayList<Selection<?>>();
+		final List<Expression<?>> group = new ArrayList<Expression<?>>();
+
+		final CriteriaQuery<Tuple> query = getFailedStatisticsQuery(manager, q, p, intervalSize, select, group)
+				.multiselect(select).groupBy(group);
+		return generateTimePeriods(manager.createQuery(query).getResultList(), intervalSize);
+	}
+
+	/**
+	 * @param manager
+	 * @param q
+	 * @param p
+	 * @param intervalSize
+	 * @param select
+	 * @param group
+	 * @return
+	 */
+	private CriteriaQuery<Tuple> getFailedStatisticsQuery(EntityManager manager, CriteriaQuery<Tuple> q, Predicate p,
+			int intervalSize, final List<Selection<?>> select, final List<Expression<?>> group) {
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+
+		final Predicate failed = c.notEqual(q.from(Statistics.class).get(Statistics_.result), "SUCCESS");
+		final Predicate pred = c.and(p, failed);
+		final Predicate where = q.getRestriction() == null ? pred : c.and(q.getRestriction(), pred);
+
+		final Root<Statistics> root = q.from(Statistics.class);
+		final Path<Date> st = root.get(Statistics_.startingTime);
+		if (intervalSize == Calendar.HOUR_OF_DAY) {
+			final Expression<Integer> hour = intFunc(c, "HOUR", st);
+			select.add(hour.alias("hour"));
+			group.add(hour);
+		}
+		if (intervalSize == Calendar.HOUR_OF_DAY || intervalSize == Calendar.DATE) {
+			final Expression<Integer> day = intFunc(c, "DAYOFMONTH", st);
+			select.add(day.alias("day"));
+			group.add(day);
+		}
+		final Expression<Integer> month = intFunc(c, "MONTH", st);
+		select.add(month.alias("month"));
+		group.add(month);
+		final Expression<Integer> year = intFunc(c, "YEAR", st);
+		select.add(year.alias("year"));
+		group.add(year);
+
+		select.add(c.count(root).alias("count"));
+		return q.where(where);
+	}
+
+	private Expression<Integer> intFunc(CriteriaBuilder c, String name, Path<?> attribute) {
+		return c.function(name, Integer.class, attribute);
 	}
 
 	@Override
 	public List<FailureCauseTimeInterval> getFailureCausesPerTime(int intervalSize, GraphFilterBuilder filter,
 			boolean byCategories) {
-		// TODO Auto-generated method stub
-		return super.getFailureCausesPerTime(intervalSize, filter, byCategories);
+		final EntityManager manager = beginTransaction();
+		final CriteriaBuilder c = manager.getCriteriaBuilder();
+
+		final CriteriaQuery<Tuple> q1 = getQuery(c.createTupleQuery(), manager, filter);
+		final Root<Statistics> stat = q1.from(Statistics.class);
+		final Root<FailureCause> fc = q1.from(FailureCause.class);
+		final Path<String> fcId = fc.get(FailureCause_.id);
+		final Predicate id = c.equal(fcId,
+				stat.join(Statistics_.failureCauseStatisticsList).get(FailureCauseStatistics_.id));
+
+		final List<Selection<?>> select = new ArrayList<Selection<?>>();
+		final List<Expression<?>> group = new ArrayList<Expression<?>>();
+		if (byCategories) {
+			final ListJoin<FailureCause, String> category = fc.join(FailureCause_.categories);
+			select.add(category.alias("category"));
+			group.add(category);
+		} else {
+			select.add(fcId.alias("id"));
+			select.add(fc.get(FailureCause_.name).alias("name"));
+			group.add(fcId);
+		}
+		final List<Tuple> result = manager
+				.createQuery(getFailedStatisticsQuery(manager, q1, id, intervalSize, select, group)
+						.multiselect(select).groupBy(group))
+				.getResultList();
+
+		final List<FailureCauseTimeInterval> failureCauseIntervals = new ArrayList<FailureCauseTimeInterval>();
+		final Map<MultiKey, FailureCauseTimeInterval> categoryTable = new HashMap<MultiKey, FailureCauseTimeInterval>();
+		for (final Tuple t : result) {
+			final TimePeriod period = generateTimePeriodFromResult(t, intervalSize);
+			final int number = t.get("count", Long.class).intValue();
+			if (byCategories) {
+				final String category = t.get("category", String.class);
+
+				final MultiKey multiKey = new MultiKey(category, period);
+				FailureCauseTimeInterval interval = categoryTable.get(multiKey);
+				if (interval == null) {
+					interval = new FailureCauseTimeInterval(period, category, number);
+					categoryTable.put(multiKey, interval);
+					failureCauseIntervals.add(interval);
+				} else {
+					interval.addNumber(number);
+				}
+			} else {
+				final FailureCauseTimeInterval timeInterval = new FailureCauseTimeInterval(period,
+						t.get("name", String.class), t.get("id", String.class), number);
+				failureCauseIntervals.add(timeInterval);
+			}
+		}
+		return failureCauseIntervals;
 	}
 
 	@Override
