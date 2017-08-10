@@ -450,8 +450,12 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	private <T> CriteriaQuery<T> getQuery(CriteriaQuery<T> q, EntityManager m, GraphFilterBuilder filter) {
+		return getQuery(q, q.from(Statistics.class), m, filter);
+	}
+
+	private <T> CriteriaQuery<T> getQuery(CriteriaQuery<T> q, Root<Statistics> r, EntityManager m,
+			GraphFilterBuilder filter) {
 		final CriteriaBuilder c = m.getCriteriaBuilder();
-		final Root<Statistics> r = q.from(Statistics.class);
 		final List<Predicate> restrictions = new ArrayList<Predicate>(7);
 		addEqualFilter(c, r, restrictions, Statistics_.master, filter.getMasterName());
 		addEqualFilter(c, r, restrictions, Statistics_.slave, filter.getSlaveName());
@@ -549,11 +553,12 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	public List<ObjectCountPair<String>> getNbrOfFailureCausesPerId(GraphFilterBuilder filter, int limit) {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
-		CriteriaQuery<Tuple> q = getQuery(c.createTupleQuery(), manager, filter);
+		final CriteriaQuery<Tuple> cq = c.createTupleQuery();
+		final Root<Statistics> s = cq.from(Statistics.class);
+		CriteriaQuery<Tuple> q = getQuery(cq, s, manager, filter);
 		// build the selections
-		final Root<Statistics> s = q.from(Statistics.class);
 		final Expression<String> fc = s.join(Statistics_.failureCauseStatisticsList).get(FailureCauseStatistics_.id);
-		final Expression<Long> count = c.count(s);
+		final Expression<Long> count = c.count(fc);
 		q = q.multiselect(fc.alias("failureCause"), count.alias("count")).groupBy(fc).orderBy(c.desc(count));
 		final TypedQuery<Tuple> tq = manager.createQuery(q);
 		addLimit(limit, tq);
@@ -585,11 +590,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	public long getNbrOfNullFailureCauses(GraphFilterBuilder filter) {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
-		final CriteriaQuery<Long> query = getQuery(c.createQuery(Long.class), manager, filter);
-		final Predicate size = getNullFailureCauses(c, query);
+		final CriteriaQuery<Long> cq = c.createQuery(Long.class);
+		final Root<Statistics> r = cq.from(Statistics.class);
+		final CriteriaQuery<Long> query = getQuery(cq, r, manager, filter);
+		final Predicate size = getNullFailureCauses(c, r, query);
 		final Predicate where = query.getRestriction() == null ? size : c.and(query.getRestriction(), size);
-		return manager.createQuery(query.select(c.count(query.from(Statistics.class)))
+		final Long result = manager.createQuery(query.select(c.count(r))
 				.where(where)).getSingleResult();
+		return result;
 	}
 
 	/**
@@ -597,9 +605,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	 * @param query
 	 * @return
 	 */
-	private Predicate getNullFailureCauses(final CriteriaBuilder c, final CriteriaQuery<?> query) {
-		final Expression<List<FailureCauseStatistics>> list = query.from(Statistics.class)
-				.get(Statistics_.failureCauseStatisticsList);
+	private Predicate getNullFailureCauses(final CriteriaBuilder c, Root<Statistics> r, final CriteriaQuery<?> query) {
+		final Expression<List<FailureCauseStatistics>> list = r.get(Statistics_.failureCauseStatisticsList);
 		return c.equal(c.size(list), 0);
 	}
 
@@ -612,7 +619,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				if (!counts.containsKey(c)) {
 					counts.put(c, new ObjectCountPair<String>(c, 0));
 				}
-				counts.get(c).addCount(1);
+				counts.get(c).addCount(fc.getCount());
 			}
 		}
 		final List<ObjectCountPair<String>> result = new ArrayList<ObjectCountPair<String>>(counts.values());
@@ -660,11 +667,16 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 
-		final CriteriaQuery<Tuple> q1 = getQuery(c.createTupleQuery(), manager, filter);
-		final Map<TimePeriod, Integer> unknown = getFailedStatistics(manager, q1, getNullFailureCauses(c, q1),
+		final CriteriaQuery<Tuple> cq1 = c.createTupleQuery();
+		final Root<Statistics> r1 = cq1.from(Statistics.class);
+		final CriteriaQuery<Tuple> q1 = getQuery(cq1, r1, manager, filter);
+		final Map<TimePeriod, Integer> unknown = getFailedStatistics(manager, q1, r1, getNullFailureCauses(c, r1, q1),
 				intervalSize);
-		final CriteriaQuery<Tuple> q2 = getQuery(c.createTupleQuery(), manager, filter);
-		final Map<TimePeriod, Integer> known = getFailedStatistics(manager, q2, c.not(getNullFailureCauses(c, q2)),
+		final CriteriaQuery<Tuple> cq2 = c.createTupleQuery();
+		final Root<Statistics> r2 = cq2.from(Statistics.class);
+		final CriteriaQuery<Tuple> q2 = getQuery(cq2, r2, manager, filter);
+		final Map<TimePeriod, Integer> known = getFailedStatistics(manager, q2, r2,
+				c.not(getNullFailureCauses(c, r2, q2)),
 				intervalSize);
 
 		final Set<TimePeriod> periods = new HashSet<TimePeriod>(unknown.keySet());
@@ -740,12 +752,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	 * @param intervalSize
 	 * @return
 	 */
-	private Map<TimePeriod, Integer> getFailedStatistics(EntityManager manager, CriteriaQuery<Tuple> q, Predicate p,
+	private Map<TimePeriod, Integer> getFailedStatistics(EntityManager manager, CriteriaQuery<Tuple> q,
+			Root<Statistics> r, Predicate p,
 			int intervalSize) {
 		final List<Selection<?>> select = new ArrayList<Selection<?>>();
 		final List<Expression<?>> group = new ArrayList<Expression<?>>();
 
-		final CriteriaQuery<Tuple> query = getFailedStatisticsQuery(manager, q, p, intervalSize, select, group)
+		final CriteriaQuery<Tuple> query = getFailedStatisticsQuery(manager, q, r, p, intervalSize, select, group)
 				.multiselect(select).groupBy(group);
 		return generateTimePeriods(manager.createQuery(query).getResultList(), intervalSize);
 	}
@@ -759,16 +772,15 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	 * @param group
 	 * @return
 	 */
-	private CriteriaQuery<Tuple> getFailedStatisticsQuery(EntityManager manager, CriteriaQuery<Tuple> q, Predicate p,
+	private CriteriaQuery<Tuple> getFailedStatisticsQuery(EntityManager manager, CriteriaQuery<Tuple> q,
+			Root<Statistics> r, Predicate p,
 			int intervalSize, final List<Selection<?>> select, final List<Expression<?>> group) {
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 
-		final Predicate failed = c.notEqual(q.from(Statistics.class).get(Statistics_.result), "SUCCESS");
+		final Predicate failed = c.notEqual(r.get(Statistics_.result), "SUCCESS");
 		final Predicate pred = c.and(p, failed);
 		final Predicate where = q.getRestriction() == null ? pred : c.and(q.getRestriction(), pred);
-
-		final Root<Statistics> root = q.from(Statistics.class);
-		final Path<Date> st = root.get(Statistics_.startingTime);
+		final Path<Date> st = r.get(Statistics_.startingTime);
 		if (intervalSize == Calendar.HOUR_OF_DAY) {
 			final Expression<Integer> hour = intFunc(c, "HOUR", st);
 			select.add(hour.alias("hour"));
@@ -786,7 +798,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		select.add(year.alias("year"));
 		group.add(year);
 
-		select.add(c.count(root).alias("count"));
+		select.add(c.count(r).alias("count"));
 		return q.where(where);
 	}
 
@@ -800,8 +812,9 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
 
-		final CriteriaQuery<Tuple> q1 = getQuery(c.createTupleQuery(), manager, filter);
-		final Root<Statistics> stat = q1.from(Statistics.class);
+		final CriteriaQuery<Tuple> cq = c.createTupleQuery();
+		final Root<Statistics> stat = cq.from(Statistics.class);
+		final CriteriaQuery<Tuple> q1 = getQuery(cq, stat, manager, filter);
 		final Root<FailureCause> fc = q1.from(FailureCause.class);
 		final Path<String> fcId = fc.get(FailureCause_.id);
 		final Predicate id = c.equal(fcId,
@@ -819,8 +832,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			group.add(fcId);
 		}
 		final List<Tuple> result = manager
-				.createQuery(getFailedStatisticsQuery(manager, q1, id, intervalSize, select, group)
-						.multiselect(select).groupBy(group))
+				.createQuery(getFailedStatisticsQuery(manager, q1, stat, id, intervalSize, select,
+						group).multiselect(select).groupBy(group))
 				.getResultList();
 
 		final List<FailureCauseTimeInterval> failureCauseIntervals = new ArrayList<FailureCauseTimeInterval>();

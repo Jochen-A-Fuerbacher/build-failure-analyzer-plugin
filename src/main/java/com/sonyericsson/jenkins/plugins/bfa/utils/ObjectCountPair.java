@@ -36,7 +36,7 @@ import java.util.Comparator;
  */
 public class ObjectCountPair<T> {
 
-    private T object;
+    private final T object;
     private int count;
 
     /**
@@ -86,4 +86,8 @@ public class ObjectCountPair<T> {
         };
     }
 
+	@Override
+	public String toString() {
+		return "ObjectCountPair [" + (object != null ? "object=" + object + ", " : "") + "count=" + count + "]";
+	}
 }
