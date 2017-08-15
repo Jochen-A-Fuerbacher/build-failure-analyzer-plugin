@@ -536,16 +536,18 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	 * @return
 	 */
 	private Map<String, FailureCause> getFailureCauses(final Collection<String> ids) {
-		final EntityManager manager = beginTransaction();
-		final CriteriaBuilder c = manager.getCriteriaBuilder();
-		final CriteriaQuery<FailureCause> fq = c.createQuery(FailureCause.class);
-		final Root<FailureCause> rf = fq.from(FailureCause.class);
-
 		final Map<String, FailureCause> fcs = new HashMap<String, FailureCause>();
-		for (final FailureCause f : manager.createQuery(fq.where(rf.get(FailureCause_.id).in(ids))).getResultList()) {
-			fcs.put(f.getId(), f);
+		if (!ids.isEmpty()) {
+			final EntityManager manager = beginTransaction();
+			final CriteriaBuilder c = manager.getCriteriaBuilder();
+			final CriteriaQuery<FailureCause> fq = c.createQuery(FailureCause.class);
+			final Root<FailureCause> rf = fq.from(FailureCause.class);
+			final TypedQuery<FailureCause> query = manager.createQuery(fq.where(rf.get(FailureCause_.id).in(ids)));
+			for (final FailureCause f : query.getResultList()) {
+				fcs.put(f.getId(), f);
+			}
+			endTransaction(manager);
 		}
-		endTransaction(manager);
 		return fcs;
 	}
 
@@ -627,7 +629,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				.reverseOrder(new Comparator<ObjectCountPair<?>>() {
 					@Override
 					public int compare(ObjectCountPair<?> o1, ObjectCountPair<?> o2) {
-						return Integer.compare(o1.getCount(), o2.getCount());
+						return Integer.valueOf(o1.getCount()).compareTo(Integer.valueOf(o2.getCount()));
 					}
 				});
 		Collections.sort(result, comparator);
