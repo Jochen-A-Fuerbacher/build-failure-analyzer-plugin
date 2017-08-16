@@ -237,15 +237,19 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauses() throws Exception {
-		final EntityManager manager = beginTransaction();
+		return getCauses(true);
+	}
 
+	private Collection<FailureCause> getCauses(boolean loadLazyCollections) {
+		final EntityManager manager = beginTransaction();
 		final CriteriaQuery<FailureCause> query = manager.getCriteriaBuilder().createQuery(FailureCause.class);
 
-		final List<FailureCause> causes = manager
-				.createQuery(query.select(query.from(FailureCause.class)))
-				.getResultList();
-		for (final FailureCause f : causes) {
-			loadLazyCollections(f);
+		final Root<FailureCause> r = query.from(FailureCause.class);
+		final List<FailureCause> causes = manager.createQuery(query.select(r)).getResultList();
+		if (loadLazyCollections) {
+			for (final FailureCause f : causes) {
+				loadLazyCollections(f);
+			}
 		}
 		endTransaction(manager);
 		return causes;
@@ -253,12 +257,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public Collection<FailureCause> getCauseNames() throws Exception {
-		return getCauses();
+		return getCauses(false);
 	}
 
 	@Override
 	public Collection<FailureCause> getShallowCauses() throws Exception {
-		return getCauses();
+		// needs to be true because modifications are fetched after transaction ends.
+		return getCauses(true);
 	}
 
 	private EntityManager beginTransaction() {
@@ -293,6 +298,12 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		return cause;
 	}
 
+	/**
+	 * try to access modifications and indications so that hibernate fetches them from db, because
+	 * it doesn't allow for fetching multiple bags in one query.
+	 *
+	 * @param f
+	 */
 	private void loadLazyCollections(FailureCause f) {
 		f.getModifications().size();
 		f.getIndications().size();
