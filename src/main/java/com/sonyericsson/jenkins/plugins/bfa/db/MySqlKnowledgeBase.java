@@ -266,13 +266,13 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		return getCauses(true);
 	}
 
-	private EntityManager beginTransaction() {
+	private synchronized EntityManager beginTransaction() {
 		final EntityManager manager = entityManagerFactory.createEntityManager();
 		manager.getTransaction().begin();
 		return manager;
 	}
 
-	private void endTransaction(EntityManager manager) {
+	private synchronized void endTransaction(EntityManager manager) {
 		manager.getTransaction().commit();
 		manager.close();
 	}
@@ -473,7 +473,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		addEqualFilter(c, r, restrictions, Statistics_.projectName, filter.getProjectName());
 		addEqualFilter(c, r, restrictions, Statistics_.result, filter.getResult());
 		if (filter.getBuildNumbers() != null && !filter.getBuildNumbers().isEmpty()) {
-			restrictions.add(c.in(r.get(Statistics_.buildNumber)).in(filter.getBuildNumbers()));
+			restrictions.add(r.get(Statistics_.buildNumber).in(filter.getBuildNumbers()));
 		}
 		if (filter.getExcludeResult() != null) {
 			restrictions.add(c.notEqual(r.get(Statistics_.result), filter.getExcludeResult()));
