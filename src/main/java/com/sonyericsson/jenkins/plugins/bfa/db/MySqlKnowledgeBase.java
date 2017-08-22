@@ -610,6 +610,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final Predicate where = query.getRestriction() == null ? size : c.and(query.getRestriction(), size);
 		final Long result = manager.createQuery(query.select(c.count(r))
 				.where(where)).getSingleResult();
+		endTransaction(manager);
 		return result;
 	}
 
@@ -691,6 +692,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		final Map<TimePeriod, Integer> known = getFailedStatistics(manager, q2, r2,
 				c.not(getNullFailureCauses(c, r2, q2)),
 				intervalSize);
+		endTransaction(manager);
 
 		final Set<TimePeriod> periods = new HashSet<TimePeriod>(unknown.keySet());
 		periods.addAll(known.keySet());
@@ -766,8 +768,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	 * @return
 	 */
 	private Map<TimePeriod, Integer> getFailedStatistics(EntityManager manager, CriteriaQuery<Tuple> q,
-			Root<Statistics> r, Predicate p,
-			int intervalSize) {
+			Root<Statistics> r, Predicate p, int intervalSize) {
 		final List<Selection<?>> select = new ArrayList<Selection<?>>();
 		final List<Expression<?>> group = new ArrayList<Expression<?>>();
 
@@ -841,13 +842,16 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			group.add(category);
 		} else {
 			select.add(fcId.alias("id"));
-			select.add(fc.get(FailureCause_.name).alias("name"));
+			final Path<String> name = fc.get(FailureCause_.name);
+			select.add(name.alias("name"));
 			group.add(fcId);
+			group.add(name);
 		}
 		final List<Tuple> result = manager
 				.createQuery(getFailedStatisticsQuery(manager, q1, stat, id, intervalSize, select,
 						group).multiselect(select).groupBy(group))
 				.getResultList();
+		endTransaction(manager);
 
 		final List<FailureCauseTimeInterval> failureCauseIntervals = new ArrayList<FailureCauseTimeInterval>();
 		final Map<MultiKey, FailureCauseTimeInterval> categoryTable = new HashMap<MultiKey, FailureCauseTimeInterval>();
