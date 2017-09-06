@@ -71,8 +71,12 @@ import com.sonyericsson.jenkins.plugins.bfa.Messages;
 import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
 import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification_;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause_;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.BuildLogIndication;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.Indication;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.MultilineBuildLogIndication;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics_;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
@@ -351,15 +355,32 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			if (oldKnowledgeBase instanceof MongoDBKnowledgeBase) {
 				convertFromAbstract(oldKnowledgeBase);
 			} else {
-				final Collection<FailureCause> fcs = oldKnowledgeBase.getCauseNames();
+				final Collection<FailureCause> fcs = oldKnowledgeBase.getCauses();
 				logger.info("Converting " + fcs.size() + " FailureCauses to SQLKnowledge base.");
 				for (final FailureCause cause : fcs) {
 					// try finding the id in the knowledgebase, if so, update it.
 					if (getCause(cause.getId()) != null) {
 						saveCause(cause);
-						// if not found, add a new.
 					} else {
+						// if not found, add a new.
 						cause.setId(null);
+						final List<FailureCauseModification> mods = new ArrayList<FailureCauseModification>();
+						for (final FailureCauseModification m : cause.getModifications()) {
+							mods.add(new FailureCauseModification(m.getUser(), m.getTime()));
+						}
+						cause.getModifications().clear();
+						cause.getModifications().addAll(mods);
+						final List<Indication> inds = new ArrayList<Indication>();
+						for (final Indication i : cause.getIndications()) {
+							Indication n;
+							//new types of indications need to be added here.
+							if (i instanceof MultilineBuildLogIndication) {
+								n = new MultilineBuildLogIndication(i.getUserProvidedExpression());
+							} else {
+								n = new BuildLogIndication(i.getUserProvidedExpression());
+							}
+							inds.add(n);
+						}
 						addCause(cause);
 					}
 				}
