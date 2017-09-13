@@ -23,10 +23,6 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.model;
 
-import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-
 import java.util.LinkedList;
 import java.util.List;
 import java.util.logging.Level;
@@ -34,6 +30,10 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
+
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.Indication;
 
 /**
@@ -73,7 +73,7 @@ public class FoundFailureCause {
     public FoundFailureCause(final FailureCause originalCause, final List<FoundIndication> indications) {
         this.id = originalCause.getId();
         this.name = originalCause.getName();
-        this.categories = originalCause.getCategories();
+        this.categories = originalCause != null ? new LinkedList<String>(originalCause.getCategories()) : new LinkedList<String>();
         this.indications = new LinkedList<FoundIndication>(indications);
         this.description = buildFormattedDescription(originalCause, this.indications, originalCause.getDescription());
     }
