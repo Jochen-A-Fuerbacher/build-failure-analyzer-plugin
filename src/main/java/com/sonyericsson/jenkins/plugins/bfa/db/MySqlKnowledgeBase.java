@@ -34,6 +34,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -90,7 +91,7 @@ import hudson.util.FormValidation;
 import hudson.util.Secret;
 import jenkins.model.Jenkins;
 
-public class MySqlKnowledgeBase extends KnowledgeBase {
+public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 
 	private static final String MYSQL_DRIVER = "com.mysql.jdbc.Driver";
 
@@ -196,6 +197,29 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
+	protected DBKnowledgeBaseCache buildCache() throws Exception {
+		return new DBKnowledgeBaseCache() {
+			@Override
+			protected List<FailureCause> updateCausesList() {
+				return MySqlKnowledgeBase.this.getCauses(true);
+			}
+
+			@Override
+			protected List<String> updateCategories() {
+				final EntityManager manager = beginTransaction();
+				final CriteriaBuilder c = manager.getCriteriaBuilder();
+				final CriteriaQuery<String> cquery = c.createQuery(String.class);
+				final Root<FailureCause> f = cquery.from(FailureCause.class);
+				final TypedQuery<String> query = manager
+						.createQuery(cquery.select(f.join(FailureCause_.categories)).distinct(true));
+				final List<String> result = query.getResultList();
+				endTransaction(manager);
+				return result;
+			}
+		};
+	}
+
+	@Override
 	public Date getLatestFailureForCause(String id) {
 		final EntityManager manager = beginTransaction();
 		final CriteriaBuilder c = manager.getCriteriaBuilder();
@@ -212,10 +236,14 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void updateLastSeen(List<String> ids, Date seen) {
-		for (final String id : ids) {
-			final FailureCause f = getCause(id);
-			f.setLastOccurred(seen);
-			saveCause(f);
+		try {
+			for (final String id : ids) {
+				final FailureCause f = getCause(id);
+				f.setLastOccurred(seen);
+				saveCause(f);
+			}
+		} catch (final Exception e) {
+			logger.log(Level.SEVERE, "Updating last seen date failed", e);
 		}
 	}
 
@@ -239,24 +267,29 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 				.getDescriptorByType(MySqlKnowledgeBaseDescriptor.class);
 	}
 
-	@Override
-	public Collection<FailureCause> getCauses() throws Exception {
-		return getCauses(true);
-	}
-
-	private Collection<FailureCause> getCauses(boolean loadLazyCollections) {
+	private List<FailureCause> getCauses(boolean loadLazyCollections) {
 		final EntityManager manager = beginTransaction();
 		final CriteriaQuery<FailureCause> query = manager.getCriteriaBuilder().createQuery(FailureCause.class);
 
 		final Root<FailureCause> r = query.from(FailureCause.class);
 		final List<FailureCause> causes = manager.createQuery(query.select(r)).getResultList();
+		final List<FailureCause> result;
 		if (loadLazyCollections) {
 			for (final FailureCause f : causes) {
 				loadLazyCollections(f);
 			}
+			result = causes;
+		} else {
+			result = new LinkedList<FailureCause>();
+			for (final FailureCause f : causes) {
+				// replace not loaded collections with empty ones
+				result.add(new FailureCause(f.getId(), f.getName(), f.getDescription(), f.getComment(),
+						f.getLastOccurred(), f.getCategories(), new LinkedList<Indication>(),
+						new LinkedList<FailureCauseModification>()));
+			}
 		}
 		endTransaction(manager);
-		return causes;
+		return result;
 	}
 
 	@Override
@@ -314,9 +347,8 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public FailureCause addCause(FailureCause cause) {
+	protected FailureCause persistCause(FailureCause cause) throws Exception {
 		persist(cause);
-		logger.info("Added failure cause '" + cause.getName() + "' with id " + cause.getId());
 		return getCause(cause.getId());
 	}
 
@@ -332,73 +364,60 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 		manager.remove(manager.contains(cause) ? cause : manager.merge(cause));
 		endTransaction(manager);
 		logger.info("Removed failure cause '" + cause.getName() + "' with id " + cause.getId());
+		updateCache();
 		return cause;
 	}
 
 	@Override
-	public FailureCause saveCause(FailureCause cause) {
+	protected FailureCause mergeCause(FailureCause cause) throws Exception {
 		if (getCause(cause.getId()) == null) {
 			logger.log(Level.WARNING, "Failure cause with id " + cause.getId()
 					+ " not available in database. Persisting it.");
-			return addCause(cause);
+			return addCause(cause, true);
 		}
 		final EntityManager manager = beginTransaction();
 		final FailureCause merged = manager.merge(cause);
 		endTransaction(manager);
-		logger.info("Updated failure cause '" + merged.getName() + "' with id " + merged.getId());
 		return merged;
 	}
 
 	@Override
 	public void convertFrom(KnowledgeBase oldKnowledgeBase) throws Exception {
 		if (!equals(oldKnowledgeBase)) {
-			if (oldKnowledgeBase instanceof MongoDBKnowledgeBase) {
-				convertFromAbstract(oldKnowledgeBase);
-			} else {
-				final Collection<FailureCause> fcs = oldKnowledgeBase.getCauses();
-				logger.info("Converting " + fcs.size() + " FailureCauses to SQLKnowledge base.");
-				for (final FailureCause cause : fcs) {
-					// try finding the id in the knowledgebase, if so, update it.
-					if (getCause(cause.getId()) != null) {
-						saveCause(cause);
-					} else {
-						// if not found, add a new.
-						cause.setId(null);
-						final List<FailureCauseModification> mods = new ArrayList<FailureCauseModification>();
-						for (final FailureCauseModification m : cause.getModifications()) {
-							mods.add(new FailureCauseModification(m.getUser(), m.getTime()));
-						}
-						cause.getModifications().clear();
-						cause.getModifications().addAll(mods);
-						final List<Indication> inds = new ArrayList<Indication>();
-						for (final Indication i : cause.getIndications()) {
-							Indication n;
-							//new types of indications need to be added here.
-							if (i instanceof MultilineBuildLogIndication) {
-								n = new MultilineBuildLogIndication(i.getUserProvidedExpression());
-							} else {
-								n = new BuildLogIndication(i.getUserProvidedExpression());
-							}
-							inds.add(n);
-						}
-						addCause(cause);
+			final Collection<FailureCause> fcs = oldKnowledgeBase.getCauses();
+			logger.info("Converting " + fcs.size() + " FailureCauses to MySqlKnowledgeBase.");
+			for (final FailureCause cause : fcs) {
+				// try finding the id in the knowledgebase, if so, update it.
+				if (getCause(cause.getId()) != null) {
+					saveCause(cause, false);
+				} else {
+					// if not found, add a new.
+					cause.setId(null);
+					//unset ids for hibernate
+					final List<FailureCauseModification> mods = new ArrayList<FailureCauseModification>();
+					for (final FailureCauseModification m : cause.getModifications()) {
+						mods.add(new FailureCauseModification(m.getUser(), m.getTime()));
 					}
+					cause.getModifications().clear();
+					cause.getModifications().addAll(mods);
+					final List<Indication> inds = new ArrayList<Indication>();
+					for (final Indication i : cause.getIndications()) {
+						Indication n;
+						// new types of indications need to be added here.
+						if (i instanceof MultilineBuildLogIndication) {
+							n = new MultilineBuildLogIndication(i.getUserProvidedExpression());
+						} else {
+							n = new BuildLogIndication(i.getUserProvidedExpression());
+						}
+						inds.add(n);
+					}
+					cause.getIndications().clear();
+					cause.getIndications().addAll(inds);
+					addCause(cause, false);
 				}
 			}
+			updateCache();
 		}
-	}
-
-	@Override
-	public List<String> getCategories() {
-		final EntityManager manager = beginTransaction();
-		final CriteriaBuilder c = manager.getCriteriaBuilder();
-		final CriteriaQuery<String> cquery = c.createQuery(String.class);
-		final Root<FailureCause> f = cquery.from(FailureCause.class);
-		final TypedQuery<String> query = manager
-				.createQuery(cquery.select(f.join(FailureCause_.categories)).distinct(true));
-		final List<String> result = query.getResultList();
-		endTransaction(manager);
-		return result;
 	}
 
 	@Override
@@ -451,7 +470,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 	}
 
 	@Override
-	public void start() throws Exception {
+	public void start() {
 		try {
 			String url = this.host.startsWith("jdbc:mysql://")
 					? this.host
@@ -469,6 +488,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 			// packing. use hibernate directly.
 			entityManagerFactory = new HibernatePersistenceProvider()
 					.createEntityManagerFactory("bfa", eProps);
+			super.start();
 		} catch (final Throwable ex) {
 			throw new ExceptionInInitializerError(ex);
 		}
@@ -476,6 +496,7 @@ public class MySqlKnowledgeBase extends KnowledgeBase {
 
 	@Override
 	public void stop() {
+		super.stop();
 		if (entityManagerFactory != null && entityManagerFactory.isOpen()) {
 			entityManagerFactory.close();
 		}

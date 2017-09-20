@@ -24,132 +24,46 @@
 
 package com.sonyericsson.jenkins.plugins.bfa.db;
 
-import com.mongodb.MongoException;
-import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
-import net.vz.mongodb.jackson.DBCursor;
-import net.vz.mongodb.jackson.JacksonDBCollection;
+import static com.sonyericsson.jenkins.plugins.bfa.db.MongoDBKnowledgeBase.NOT_REMOVED_QUERY;
 
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Timer;
-import java.util.TimerTask;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
-import static com.sonyericsson.jenkins.plugins.bfa.db.MongoDBKnowledgeBase.NOT_REMOVED_QUERY;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+
+import net.vz.mongodb.jackson.DBCursor;
+import net.vz.mongodb.jackson.JacksonDBCollection;
 
 /**
  * Cache for the MongoDBKnowledgeBase.
  *
  * @author Tomas Westling &lt;tomas.westling@sonyericsson.com&gt;
  */
-public class MongoDBKnowledgeBaseCache {
+public class MongoDBKnowledgeBaseCache extends DBKnowledgeBaseCache {
+	private final JacksonDBCollection<FailureCause, String> jacksonCollection;
 
-    private Semaphore shouldUpdate;
-    private UpdateThread updaterThread;
-    private Timer timer;
-    private TimerTask timerTask;
-    private List<FailureCause> cachedFailureCauses;
-    private List<String> categories;
-    private JacksonDBCollection<FailureCause, String> jacksonCollection;
+	/**
+	 * Standard constructor.
+	 *
+	 * @param jacksonCollection
+	 *            the JacksonDBCollection, used for accessing the database.
+	 */
+	public MongoDBKnowledgeBaseCache(JacksonDBCollection<FailureCause, String> jacksonCollection) {
+		this.jacksonCollection = jacksonCollection;
+	}
 
-    private static final long CACHE_UPDATE_INTERVAL = 60000;
-    private static final Logger logger = Logger.getLogger(MongoDBKnowledgeBase.class.getName());
+	@Override
+	protected List<FailureCause> updateCausesList() {
+		final List<FailureCause> list = new LinkedList<FailureCause>();
+		final DBCursor<FailureCause> dbCauses = jacksonCollection.find(NOT_REMOVED_QUERY);
+		while (dbCauses.hasNext()) {
+			list.add(dbCauses.next());
+		}
+		return list;
+	}
 
-    /**
-     * Standard constructor.
-     * @param jacksonCollection the JacksonDBCollection, used for accessing the database.
-     */
-    public MongoDBKnowledgeBaseCache(JacksonDBCollection<FailureCause, String> jacksonCollection) {
-        this.jacksonCollection = jacksonCollection;
-    }
-
-    /**
-     * Run when the cache, including the update mechanism, should start running.
-     */
-    public void start() {
-        shouldUpdate = new Semaphore();
-        updaterThread = new UpdateThread();
-        updaterThread.start();
-        timer = new Timer();
-        timerTask = new TimerTask() {
-            @Override
-            public void run() {
-                shouldUpdate.release();
-            }
-        };
-        timer.scheduleAtFixedRate(timerTask, 0, CACHE_UPDATE_INTERVAL);
-    }
-
-    /**
-     * Run when we want to shut down the cache.
-     */
-    public void stop() {
-        timer.cancel();
-        timer = null;
-        timerTask = null;
-        updaterThread.stopThread();
-        updaterThread = null;
-    }
-
-    /**
-     * Signal that an update of the Cache should be made.
-     */
-    public void updateCache() {
-        if (shouldUpdate != null) {
-            shouldUpdate.release();
-        }
-    }
-
-    /**
-     * Getter for the cachedFailureCauses.
-     * @return the causes.
-     */
-    public List<FailureCause> getCauses() {
-        return cachedFailureCauses;
-    }
-
-    /**
-     * Getter for the categories of all FailureCauses.
-     * @return the categories.
-     */
-    public List<String> getCategories() {
-        return categories;
-    }
-
-    /**
-     * The thread responsible for updating the MongoDB cache.
-     */
-    protected class UpdateThread extends Thread {
-        private volatile boolean stop = false;
-            @Override
-            public void run() {
-                while (!stop) {
-                    try {
-                        shouldUpdate.acquire();
-                        if (stop) {
-                            break;
-                        }
-                        List<FailureCause> list = new LinkedList<FailureCause>();
-                        DBCursor<FailureCause> dbCauses =  jacksonCollection.find(NOT_REMOVED_QUERY);
-                        while (dbCauses.hasNext()) {
-                            list.add(dbCauses.next());
-                        }
-                        cachedFailureCauses = list;
-                        categories = jacksonCollection.distinct("categories");
-                    } catch (MongoException e) {
-                        logger.log(Level.SEVERE, "MongoException caught when updating cache: " + e);
-                    } catch (InterruptedException e) {
-                        logger.log(Level.WARNING, "Updater thread interrupted", e);
-                    }
-                }
-            }
-            /**
-             * Stops the execution of this thread.
-             */
-            protected void stopThread() {
-                stop = true;
-                shouldUpdate.release();
-            }
-        }
-    }
+	@Override
+	protected List<String> updateCategories() {
+		return jacksonCollection.distinct("categories");
+	}
+}

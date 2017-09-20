@@ -24,11 +24,21 @@
 
 package com.sonyericsson.jenkins.plugins.bfa.db;
 
+import java.io.Serializable;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.jfree.data.time.TimePeriod;
+
 import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
 import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
 import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
+
 import hudson.ExtensionList;
 import hudson.Util;
 import hudson.model.AbstractBuild;
@@ -36,14 +46,6 @@ import hudson.model.Describable;
 import hudson.model.Descriptor;
 import hudson.model.Run;
 import jenkins.model.Jenkins;
-import org.jfree.data.time.TimePeriod;
-
-import java.io.Serializable;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
 
 /**
  * Base class for storage implementations of {@link FailureCause}s. Extend this class and put <code>@Extension</code> on
@@ -149,7 +151,7 @@ public abstract class KnowledgeBase implements Describable<KnowledgeBase>, Seria
      * @throws Exception if anything goes wrong in the KnowledgeBase handling.
      */
     protected void convertFromAbstract(KnowledgeBase oldKnowledgeBase) throws Exception {
-        for (FailureCause cause : oldKnowledgeBase.getCauseNames()) {
+        for (final FailureCause cause : oldKnowledgeBase.getCauseNames()) {
             saveCause(oldKnowledgeBase.getCause(cause.getId()));
         }
     }

@@ -23,45 +23,8 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.db;
 
-import com.mongodb.AggregationOutput;
-import com.mongodb.BasicDBList;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.DBRef;
-import com.mongodb.Mongo;
-import com.mongodb.MongoException;
-import com.sonyericsson.jenkins.plugins.bfa.Messages;
-import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
-import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
-import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
-import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
-import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
-import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
-import com.sonyericsson.jenkins.plugins.bfa.statistics.UpstreamCause;
-import com.sonyericsson.jenkins.plugins.bfa.utils.BfaUtils;
-import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
-import hudson.Extension;
-import hudson.Util;
-import hudson.model.Descriptor;
-import hudson.model.Run;
-import hudson.util.FormValidation;
-import hudson.util.Secret;
-import jenkins.model.Jenkins;
-import net.vz.mongodb.jackson.DBCursor;
-import net.vz.mongodb.jackson.JacksonDBCollection;
-import net.vz.mongodb.jackson.WriteResult;
-import org.apache.commons.collections.keyvalue.MultiKey;
-import org.bson.types.ObjectId;
-import org.jfree.data.time.Day;
-import org.jfree.data.time.Hour;
-import org.jfree.data.time.Month;
-import org.jfree.data.time.TimePeriod;
-import org.kohsuke.stapler.DataBoundConstructor;
-import org.kohsuke.stapler.QueryParameter;
+import static java.util.Arrays.asList;
 
-import javax.naming.AuthenticationException;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -81,14 +44,54 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static java.util.Arrays.asList;
+import javax.naming.AuthenticationException;
+
+import org.apache.commons.collections.keyvalue.MultiKey;
+import org.bson.types.ObjectId;
+import org.jfree.data.time.Day;
+import org.jfree.data.time.Hour;
+import org.jfree.data.time.Month;
+import org.jfree.data.time.TimePeriod;
+import org.kohsuke.stapler.DataBoundConstructor;
+import org.kohsuke.stapler.QueryParameter;
+
+import com.mongodb.AggregationOutput;
+import com.mongodb.BasicDBList;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DB;
+import com.mongodb.DBCollection;
+import com.mongodb.DBObject;
+import com.mongodb.DBRef;
+import com.mongodb.Mongo;
+import com.mongodb.MongoException;
+import com.sonyericsson.jenkins.plugins.bfa.Messages;
+import com.sonyericsson.jenkins.plugins.bfa.graphs.FailureCauseTimeInterval;
+import com.sonyericsson.jenkins.plugins.bfa.graphs.GraphFilterBuilder;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
+import com.sonyericsson.jenkins.plugins.bfa.model.indication.FoundIndication;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
+import com.sonyericsson.jenkins.plugins.bfa.statistics.UpstreamCause;
+import com.sonyericsson.jenkins.plugins.bfa.utils.BfaUtils;
+import com.sonyericsson.jenkins.plugins.bfa.utils.ObjectCountPair;
+
+import hudson.Extension;
+import hudson.Util;
+import hudson.model.Descriptor;
+import hudson.model.Run;
+import hudson.util.FormValidation;
+import hudson.util.Secret;
+import jenkins.model.Jenkins;
+import net.vz.mongodb.jackson.DBCursor;
+import net.vz.mongodb.jackson.JacksonDBCollection;
+import net.vz.mongodb.jackson.WriteResult;
 
 /**
  * Handling of the MongoDB way of saving the knowledge base.
  *
  * @author Tomas Westling &lt;tomas.westling@sonyericsson.com&gt;
  */
-public class MongoDBKnowledgeBase extends KnowledgeBase {
+public class MongoDBKnowledgeBase extends CachedKnowledgeBase {
 
     private static final long serialVersionUID = 4984133048405390951L;
     /**The name of the cause collection in the database.*/
@@ -108,15 +111,14 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     private transient DBCollection statisticsCollection;
     private transient JacksonDBCollection<FailureCause, String> jacksonCollection;
     private transient JacksonDBCollection<Statistics, String> jacksonStatisticsCollection;
-    private transient MongoDBKnowledgeBaseCache cache;
 
-    private String host;
-    private int port;
-    private String dbName;
-    private String userName;
-    private Secret password;
-    private boolean enableStatistics;
-    private boolean successfulLogging;
+    private final String host;
+    private final int port;
+    private final String dbName;
+    private final String userName;
+    private final Secret password;
+    private final boolean enableStatistics;
+    private final boolean successfulLogging;
 
     /**
      * Getter for the MongoDB user name.
@@ -180,42 +182,14 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
         this.successfulLogging = successfulLogging;
     }
 
-    @Override
-    public synchronized void start() throws UnknownHostException, AuthenticationException {
-        initCache();
-    }
-
-    @Override
-    public synchronized void stop() {
-        if (cache != null) {
-            cache.stop();
-            cache = null;
-        }
-    }
-
     /**
      * Initializes the cache if it is null.
      * @throws UnknownHostException if we cannot connect to the database.
      * @throws AuthenticationException if we cannot authenticate towards the database.
      */
-    private void initCache() throws UnknownHostException, AuthenticationException {
-        if (cache == null) {
-            cache = new MongoDBKnowledgeBaseCache(getJacksonCollection());
-            cache.start();
-        }
-    }
-
-    /**
-     * @see KnowledgeBase#getCauses()
-     * Can throw MongoException if unknown fields exist in the database.
-     * @return the full list of causes.
-     * @throws UnknownHostException if a connection to the host cannot be made.
-     * @throws AuthenticationException if we cannot authenticate towards the database.
-     */
     @Override
-    public Collection<FailureCause> getCauses() throws UnknownHostException, AuthenticationException {
-        initCache();
-        return cache.getCauses();
+	protected DBKnowledgeBaseCache buildCache() throws UnknownHostException, AuthenticationException {
+    	return new MongoDBKnowledgeBaseCache(getJacksonCollection());
     }
 
     /**
@@ -227,10 +201,10 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      */
     @Override
     public Collection<FailureCause> getCauseNames() throws UnknownHostException, AuthenticationException {
-        List<FailureCause> list = new LinkedList<FailureCause>();
-        DBObject keys = new BasicDBObject();
+        final List<FailureCause> list = new LinkedList<FailureCause>();
+        final DBObject keys = new BasicDBObject();
         keys.put("name", 1);
-        DBCursor<FailureCause> dbCauses =  getJacksonCollection().find(NOT_REMOVED_QUERY, keys);
+        final DBCursor<FailureCause> dbCauses =  getJacksonCollection().find(NOT_REMOVED_QUERY, keys);
         while (dbCauses.hasNext()) {
             list.add(dbCauses.next());
         }
@@ -240,15 +214,15 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public Collection<FailureCause> getShallowCauses() throws Exception {
-        List<FailureCause> list = new LinkedList<FailureCause>();
-        DBObject keys = new BasicDBObject();
+        final List<FailureCause> list = new LinkedList<FailureCause>();
+        final DBObject keys = new BasicDBObject();
         keys.put("name", 1);
         keys.put("description", 1);
         keys.put("categories", 1);
         keys.put("comment", 1);
         keys.put("modifications", 1);
         keys.put("lastOccurred", 1);
-        BasicDBObject orderBy = new BasicDBObject("name", 1);
+        final BasicDBObject orderBy = new BasicDBObject("name", 1);
         DBCursor<FailureCause> dbCauses =  getJacksonCollection().find(NOT_REMOVED_QUERY, keys);
         dbCauses = dbCauses.sort(orderBy);
         while (dbCauses.hasNext()) {
@@ -262,7 +236,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
         FailureCause returnCase = null;
         try {
             returnCase = getJacksonCollection().findOneById(id);
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
          logger.fine("Could not find the id, returning null for id: " + id);
             return returnCase;
         }
@@ -270,73 +244,26 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     }
 
     @Override
-    public FailureCause addCause(FailureCause cause) throws UnknownHostException, AuthenticationException {
-        return addCause(cause, true);
-    }
-
-    @Override
     public FailureCause removeCause(String id) throws Exception {
-        BasicDBObject idq = new BasicDBObject("_id", new ObjectId(id));
-        BasicDBObject removedInfo = new BasicDBObject("timestamp", new Date());
+        final BasicDBObject idq = new BasicDBObject("_id", new ObjectId(id));
+        final BasicDBObject removedInfo = new BasicDBObject("timestamp", new Date());
         removedInfo.put("by", Jenkins.getAuthentication().getName());
-        BasicDBObject update = new BasicDBObject("$set", new BasicDBObject("_removed", removedInfo));
-        FailureCause modified = getJacksonCollection().findAndModify(idq, null, null, false, update, true, false);
-        initCache();
-        cache.updateCache();
+        final BasicDBObject update = new BasicDBObject("$set", new BasicDBObject("_removed", removedInfo));
+        final FailureCause modified = getJacksonCollection().findAndModify(idq, null, null, false, update, true, false);
+        updateCache();
         return modified;
     }
 
-    /**
-     * Does not update the cache, used when we know we will have a lot of save/add calls all at once,
-     * e.g. during a convert.
-     *
-     * @param cause the FailureCause to add.
-     * @param doUpdate true if a cache update should be made, false if not.
-     *
-     * @return the added FailureCause.
-     *
-     * @throws UnknownHostException If a connection to the Mongo database cannot be made.
-     * @throws javax.naming.AuthenticationException if we cannot authenticate towards the database.
-     *
-     * @see MongoDBKnowledgeBase#addCause(FailureCause)
-     */
-    public FailureCause addCause(FailureCause cause, boolean doUpdate) throws UnknownHostException,
-            AuthenticationException {
-        WriteResult<FailureCause, String> result = getJacksonCollection().insert(cause);
-        if (doUpdate) {
-            initCache();
-            cache.updateCache();
-        }
-        return result.getSavedObject();
+    @Override
+    protected FailureCause persistCause(FailureCause cause) throws AuthenticationException, MongoException, UnknownHostException {
+    	final WriteResult<FailureCause, String> result = getJacksonCollection().insert(cause);
+    	return result.getSavedObject();
     }
 
     @Override
-    public FailureCause saveCause(FailureCause cause) throws UnknownHostException, AuthenticationException {
-        return saveCause(cause, true);
-    }
-
-    /**
-     * Does not update the cache, used when we know we will have a lot of save/add calls all at once,
-     * e.g. during a convert.
-     *
-     * @param cause the FailureCause to save.
-     * @param doUpdate true if a cache update should be made, false if not.
-     *
-     * @return the saved FailureCause.
-     *
-     * @throws UnknownHostException If a connection to the Mongo database cannot be made.
-     * @throws AuthenticationException if we cannot authenticate towards the database.
-     *
-     * @see MongoDBKnowledgeBase#saveCause(FailureCause)
-     */
-    public FailureCause saveCause(FailureCause cause, boolean doUpdate) throws UnknownHostException,
-            AuthenticationException {
-        WriteResult<FailureCause, String> result =  getJacksonCollection().save(cause);
-        if (doUpdate) {
-            initCache();
-            cache.updateCache();
-        }
-        return result.getSavedObject();
+    protected FailureCause mergeCause(FailureCause cause) throws Exception {
+    	final WriteResult<FailureCause, String> result =  getJacksonCollection().save(cause);
+    	return result.getSavedObject();
     }
 
     @Override
@@ -345,32 +272,27 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             convertFromAbstract(oldKnowledgeBase);
             convertRemoved((MongoDBKnowledgeBase)oldKnowledgeBase);
         } else {
-            for (FailureCause cause : oldKnowledgeBase.getCauseNames()) {
+            for (final FailureCause cause : oldKnowledgeBase.getCauseNames()) {
                 try {
+                	// get cause with fetch indications, modifications, etc
+                	final FailureCause fullCause = oldKnowledgeBase.getCause(cause.getId());
                     //try finding the id in the knowledgebase, if so, update it.
                     if (getCause(cause.getId()) != null) {
                         //doing all the additions to the database first and then fetching to the cache only once.
-                        saveCause(cause, false);
+                        saveCause(fullCause, false);
                     //if not found, add a new.
                     } else {
-                        cause.setId(null);
-                        addCause(cause, false);
+                        fullCause.setId(null);
+                        addCause(fullCause, false);
                     }
                   //Safety net for the case that Mongo should throw anything if the id has a really weird form.
-                } catch (MongoException e) {
+                } catch (final MongoException e) {
                     cause.setId(null);
                     addCause(cause, false);
                 }
             }
-            initCache();
-            cache.updateCache();
+            updateCache();
         }
-    }
-
-    @Override
-    public List<String> getCategories() throws UnknownHostException, AuthenticationException {
-        initCache();
-        return cache.getCategories();
     }
 
     /**
@@ -380,9 +302,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @throws Exception if something goes wrong.
      */
     protected void convertRemoved(MongoDBKnowledgeBase oldKnowledgeBase) throws Exception {
-        List<DBObject> removed = oldKnowledgeBase.getRemovedCauses();
-        DBCollection dbCollection = getJacksonCollection().getDbCollection();
-        for (DBObject obj : removed) {
+        final List<DBObject> removed = oldKnowledgeBase.getRemovedCauses();
+        final DBCollection dbCollection = getJacksonCollection().getDbCollection();
+        for (final DBObject obj : removed) {
             dbCollection.save(obj);
         }
     }
@@ -394,9 +316,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @throws Exception if so.
      */
     protected List<DBObject> getRemovedCauses() throws Exception {
-        BasicDBObject query = new BasicDBObject("_removed", new BasicDBObject("$exists", true));
-        com.mongodb.DBCursor dbCursor = getJacksonCollection().getDbCollection().find(query);
-        List<DBObject> removed = new LinkedList<DBObject>();
+        final BasicDBObject query = new BasicDBObject("_removed", new BasicDBObject("$exists", true));
+        final com.mongodb.DBCursor dbCursor = getJacksonCollection().getDbCollection().find(query);
+        final List<DBObject> removed = new LinkedList<DBObject>();
         while (dbCursor.hasNext()) {
             removed.add(dbCursor.next());
         }
@@ -406,7 +328,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public boolean equals(KnowledgeBase oldKnowledgeBase) {
         if (getClass().isInstance(oldKnowledgeBase)) {
-            MongoDBKnowledgeBase oldMongoDBKnowledgeBase = (MongoDBKnowledgeBase)oldKnowledgeBase;
+            final MongoDBKnowledgeBase oldMongoDBKnowledgeBase = (MongoDBKnowledgeBase)oldKnowledgeBase;
             return equals(oldMongoDBKnowledgeBase.getHost(), host)
                     && oldMongoDBKnowledgeBase.getPort() == port
                     && equals(oldMongoDBKnowledgeBase.getDbName(), dbName)
@@ -465,7 +387,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public void saveStatistics(Statistics stat) throws UnknownHostException, AuthenticationException {
-        DBObject object = new BasicDBObject();
+        final DBObject object = new BasicDBObject();
         object.put("projectName", stat.getProjectName());
         object.put("buildNumber", stat.getBuildNumber());
         object.put("displayName", stat.getDisplayName());
@@ -478,13 +400,13 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
         DBObject cause = null;
         if (stat.getUpstreamCause() != null) {
             cause = new BasicDBObject();
-            UpstreamCause upstreamCause = stat.getUpstreamCause();
+            final UpstreamCause upstreamCause = stat.getUpstreamCause();
             cause.put("project", upstreamCause.getUpstreamProject());
             cause.put("build", upstreamCause.getUpstreamBuild());
         }
         object.put("upstreamCause", cause);
         object.put("result", stat.getResult());
-        List<FailureCauseStatistics> failureCauseStatisticsList = stat.getFailureCauseStatisticsList();
+        final List<FailureCauseStatistics> failureCauseStatisticsList = stat.getFailureCauseStatisticsList();
         addFailureCausesToDBObject(object, failureCauseStatisticsList);
 
         getStatisticsCollection().insert(object);
@@ -493,9 +415,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public List<Statistics> getStatistics(GraphFilterBuilder filter, int limit)
             throws UnknownHostException, AuthenticationException {
-        DBObject matchFields = generateMatchFields(filter);
+        final DBObject matchFields = generateMatchFields(filter);
         DBCursor<Statistics> dbCursor = getJacksonStatisticsCollection().find(matchFields);
-        BasicDBObject buildNumberDescending = new BasicDBObject("buildNumber", -1);
+        final BasicDBObject buildNumberDescending = new BasicDBObject("buildNumber", -1);
         dbCursor = dbCursor.sort(buildNumberDescending);
         if (limit > 0) {
             dbCursor = dbCursor.limit(limit);
@@ -505,12 +427,12 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public long getNbrOfNullFailureCauses(GraphFilterBuilder filter) {
-        DBObject matchFields = generateMatchFields(filter);
+        final DBObject matchFields = generateMatchFields(filter);
         matchFields.put("failureCauses", null);
 
         try {
             return getStatisticsCollection().count(matchFields);
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.fine("Unable to get number of null failure causes");
             e.printStackTrace();
         }
@@ -519,51 +441,51 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public Map<TimePeriod, Double> getUnknownFailureCauseQuotaPerTime(int intervalSize, GraphFilterBuilder filter) {
-        Map<TimePeriod, Integer> unknownFailures = new HashMap<TimePeriod, Integer>();
-        Map<TimePeriod, Integer> knownFailures = new HashMap<TimePeriod, Integer>();
-        Set<TimePeriod> periods = new HashSet<TimePeriod>();
+        final Map<TimePeriod, Integer> unknownFailures = new HashMap<TimePeriod, Integer>();
+        final Map<TimePeriod, Integer> knownFailures = new HashMap<TimePeriod, Integer>();
+        final Set<TimePeriod> periods = new HashSet<TimePeriod>();
 
-        DBObject matchFields = generateMatchFields(filter);
-        DBObject match = new BasicDBObject("$match", matchFields);
+        final DBObject matchFields = generateMatchFields(filter);
+        final DBObject match = new BasicDBObject("$match", matchFields);
 
         // Use $project to change all null failurecauses to 'false' since
         // it's not possible to group by 'null':
-        DBObject projectFields = new BasicDBObject();
+        final DBObject projectFields = new BasicDBObject();
         projectFields.put("startingTime", 1);
-        DBObject nullToFalse = new BasicDBObject("$ifNull", asList("$failureCauses", false));
+        final DBObject nullToFalse = new BasicDBObject("$ifNull", asList("$failureCauses", false));
         projectFields.put("failureCauses", nullToFalse);
-        DBObject project = new BasicDBObject("$project", projectFields);
+        final DBObject project = new BasicDBObject("$project", projectFields);
 
         // Group by date and false/non false failure causes:
-        DBObject idFields = generateTimeGrouping(intervalSize);
-        DBObject checkNullFailureCause = new BasicDBObject("$eq", asList("$failureCauses", false));
+        final DBObject idFields = generateTimeGrouping(intervalSize);
+        final DBObject checkNullFailureCause = new BasicDBObject("$eq", asList("$failureCauses", false));
         idFields.put("isNullFailureCause", checkNullFailureCause);
-        DBObject groupFields = new BasicDBObject();
+        final DBObject groupFields = new BasicDBObject();
         groupFields.put("_id", idFields);
         groupFields.put("number", new BasicDBObject("$sum", 1));
-        DBObject group = new BasicDBObject("$group", groupFields);
+        final DBObject group = new BasicDBObject("$group", groupFields);
 
         AggregationOutput output;
         try {
             output = getStatisticsCollection().aggregate(match, project, group);
-            for (DBObject result : output.results()) {
-                DBObject groupedAttrs = (DBObject)result.get("_id");
-                TimePeriod period = generateTimePeriodFromResult(result, intervalSize);
+            for (final DBObject result : output.results()) {
+                final DBObject groupedAttrs = (DBObject)result.get("_id");
+                final TimePeriod period = generateTimePeriodFromResult(result, intervalSize);
                 periods.add(period);
-                int number = (Integer)result.get("number");
-                boolean isNullFailureCause = (Boolean)groupedAttrs.get("isNullFailureCause");
+                final int number = (Integer)result.get("number");
+                final boolean isNullFailureCause = (Boolean)groupedAttrs.get("isNullFailureCause");
                 if (isNullFailureCause) {
                     unknownFailures.put(period, number);
                 } else {
                     knownFailures.put(period, number);
                 }
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.fine("Unable to get unknown failure cause quota per time");
             e.printStackTrace();
         }
-        Map<TimePeriod, Double> nullFailureCauseQuotas = new HashMap<TimePeriod, Double>();
-        for (TimePeriod timePeriod : periods) {
+        final Map<TimePeriod, Double> nullFailureCauseQuotas = new HashMap<TimePeriod, Double>();
+        for (final TimePeriod timePeriod : periods) {
             int unknownFailureCount = 0;
             int knownFailureCount = 0;
             if (unknownFailures.containsKey(timePeriod)) {
@@ -585,18 +507,18 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public List<ObjectCountPair<String>> getNbrOfFailureCausesPerId(GraphFilterBuilder filter, int maxNbr) {
-        List<ObjectCountPair<String>> nbrOfFailureCausesPerId = new ArrayList<ObjectCountPair<String>>();
-        DBObject matchFields = generateMatchFields(filter);
-        DBObject match = new BasicDBObject("$match", matchFields);
+        final List<ObjectCountPair<String>> nbrOfFailureCausesPerId = new ArrayList<ObjectCountPair<String>>();
+        final DBObject matchFields = generateMatchFields(filter);
+        final DBObject match = new BasicDBObject("$match", matchFields);
 
-        DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
+        final DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
 
-        DBObject groupFields = new BasicDBObject();
+        final DBObject groupFields = new BasicDBObject();
         groupFields.put("_id", "$failureCauses.failureCause");
         groupFields.put("number", new BasicDBObject("$sum", 1));
-        DBObject group = new BasicDBObject("$group", groupFields);
+        final DBObject group = new BasicDBObject("$group", groupFields);
 
-        DBObject sort = new BasicDBObject("$sort", new BasicDBObject("number", -1));
+        final DBObject sort = new BasicDBObject("$sort", new BasicDBObject("number", -1));
 
         DBObject limit = null;
         if (maxNbr > 0) {
@@ -610,15 +532,15 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             } else {
                 output = getStatisticsCollection().aggregate(match, unwind, group, sort, limit);
             }
-            for (DBObject result : output.results()) {
-                DBRef failureCauseRef = (DBRef)result.get("_id");
+            for (final DBObject result : output.results()) {
+                final DBRef failureCauseRef = (DBRef)result.get("_id");
                 if (failureCauseRef != null) {
-                    Integer number = (Integer)result.get("number");
-                    String id = failureCauseRef.getId().toString();
+                    final Integer number = (Integer)result.get("number");
+                    final String id = failureCauseRef.getId().toString();
                     nbrOfFailureCausesPerId.add(new ObjectCountPair<String>(id, number));
                 }
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.fine("Unable to get failure causes per id");
             e.printStackTrace();
         }
@@ -629,27 +551,27 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public Date getLatestFailureForCause(String id) {
 
-        DBObject causeToMatch = new BasicDBObject("$ref", "failureCauses");
+        final DBObject causeToMatch = new BasicDBObject("$ref", "failureCauses");
         causeToMatch.put("$id", new ObjectId(id));
 
-        DBObject causeList = new BasicDBObject("failureCauses.failureCause", causeToMatch);
+        final DBObject causeList = new BasicDBObject("failureCauses.failureCause", causeToMatch);
 
-        DBObject match = new BasicDBObject("$match", causeList);
-        DBObject sort = new BasicDBObject("$sort", new BasicDBObject("startingTime", -1));
-        DBObject limit = new BasicDBObject("$limit", 1);
+        final DBObject match = new BasicDBObject("$match", causeList);
+        final DBObject sort = new BasicDBObject("$sort", new BasicDBObject("startingTime", -1));
+        final DBObject limit = new BasicDBObject("$limit", 1);
 
         AggregationOutput output;
         try {
             output = getStatisticsCollection().aggregate(match, sort, limit);
 
-            for (DBObject result : output.results()) {
-                Date startingTime = (Date)result.get("startingTime");
+            for (final DBObject result : output.results()) {
+                final Date startingTime = (Date)result.get("startingTime");
 
                 if (startingTime != null) {
                     return startingTime;
                 }
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.log(Level.WARNING, "Failed getting latest failure of cause", e);
         }
 
@@ -662,7 +584,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
         try {
             //Get the creation date using time information in MongoDB id:
             creationDate = new Date(new ObjectId(id).getTime());
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             logger.log(Level.WARNING, "Could not retrieve original modification", e);
             creationDate = new Date(0);
         }
@@ -671,18 +593,18 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public void updateLastSeen(List<String> ids, Date seen) {
-        List<ObjectId> objectIds = new LinkedList<ObjectId>();
-        for (String id : ids) {
+        final List<ObjectId> objectIds = new LinkedList<ObjectId>();
+        for (final String id : ids) {
             objectIds.add(new ObjectId(id));
         }
-        DBObject match = new BasicDBObject("_id", new BasicDBObject("$in", objectIds));
-        DBObject set = new BasicDBObject("$set", new BasicDBObject("lastOccurred", seen));
+        final DBObject match = new BasicDBObject("_id", new BasicDBObject("$in", objectIds));
+        final DBObject set = new BasicDBObject("$set", new BasicDBObject("lastOccurred", seen));
 
         try {
             getJacksonCollection().updateMulti(match, set);
-        } catch (UnknownHostException e) {
+        } catch (final UnknownHostException e) {
             logger.log(Level.WARNING, "Failed connecting to MongoDB when updating FailureCauses' last occurrence", e);
-        } catch (AuthenticationException e) {
+        } catch (final AuthenticationException e) {
             logger.log(Level.WARNING, "Failed authentication when updating FailureCauses' last occurrence", e);
         }
     }
@@ -695,7 +617,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @return DBObject containing fields to match
      */
     private static DBObject generateMatchFieldsBase(GraphFilterBuilder filter) {
-        DBObject matchFields = new BasicDBObject();
+        final DBObject matchFields = new BasicDBObject();
         if (filter != null) {
             putNonNullStringValue(matchFields, "master", filter.getMasterName());
             putNonNullStringValue(matchFields, "slaveHostName", filter.getSlaveName());
@@ -716,7 +638,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @return DBObject containing fields to match
      */
     private static DBObject generateMatchFields(GraphFilterBuilder filter) {
-        DBObject matchFields = generateMatchFieldsBase(filter);
+        final DBObject matchFields = generateMatchFieldsBase(filter);
         putNonNullBasicDBObject(matchFields, "result", "$ne", "SUCCESS");
 
         return matchFields;
@@ -752,18 +674,18 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public List<ObjectCountPair<FailureCause>> getNbrOfFailureCauses(GraphFilterBuilder filter) {
 
-        List<ObjectCountPair<String>> nbrOfFailureCausesPerId = getNbrOfFailureCausesPerId(filter, 0);
-        List<ObjectCountPair<FailureCause>> nbrOfFailureCauses = new ArrayList<ObjectCountPair<FailureCause>>();
+        final List<ObjectCountPair<String>> nbrOfFailureCausesPerId = getNbrOfFailureCausesPerId(filter, 0);
+        final List<ObjectCountPair<FailureCause>> nbrOfFailureCauses = new ArrayList<ObjectCountPair<FailureCause>>();
         try {
-            for (ObjectCountPair<String> countPair : nbrOfFailureCausesPerId) {
-                String id = countPair.getObject();
-                int count = countPair.getCount();
-                FailureCause failureCause = getCause(id);
+            for (final ObjectCountPair<String> countPair : nbrOfFailureCausesPerId) {
+                final String id = countPair.getObject();
+                final int count = countPair.getCount();
+                final FailureCause failureCause = getCause(id);
                 if (failureCause != null) {
                     nbrOfFailureCauses.add(new ObjectCountPair<FailureCause>(failureCause, count));
                 }
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.fine("Unable to count failure causes");
             e.printStackTrace();
         }
@@ -772,9 +694,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public List<ObjectCountPair<String>> getFailureCauseNames(GraphFilterBuilder filter) {
-        List<ObjectCountPair<String>> nbrOfFailureCauseNames = new ArrayList<ObjectCountPair<String>>();
-        for (ObjectCountPair<FailureCause> countPair : getNbrOfFailureCauses(filter)) {
-            FailureCause failureCause = countPair.getObject();
+        final List<ObjectCountPair<String>> nbrOfFailureCauseNames = new ArrayList<ObjectCountPair<String>>();
+        for (final ObjectCountPair<FailureCause> countPair : getNbrOfFailureCauses(filter)) {
+            final FailureCause failureCause = countPair.getObject();
             if (failureCause.getName() != null) {
                 nbrOfFailureCauseNames.add(new ObjectCountPair<String>(failureCause.getName(), countPair.getCount()));
             }
@@ -784,35 +706,35 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public Map<Integer, List<FailureCause>> getFailureCausesPerBuild(GraphFilterBuilder filter) {
-        Map<Integer, List<FailureCause>> nbrOfFailureCausesPerBuild = new HashMap<Integer, List<FailureCause>>();
-        DBObject matchFields = generateMatchFields(filter);
-        DBObject match = new BasicDBObject("$match", matchFields);
+        final Map<Integer, List<FailureCause>> nbrOfFailureCausesPerBuild = new HashMap<Integer, List<FailureCause>>();
+        final DBObject matchFields = generateMatchFields(filter);
+        final DBObject match = new BasicDBObject("$match", matchFields);
 
-        DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
+        final DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
 
-        DBObject groupFields = new BasicDBObject("_id", "$buildNumber");
+        final DBObject groupFields = new BasicDBObject("_id", "$buildNumber");
         groupFields.put("failureCauses", new BasicDBObject("$addToSet", "$failureCauses.failureCause"));
-        DBObject group = new BasicDBObject("$group", groupFields);
+        final DBObject group = new BasicDBObject("$group", groupFields);
 
-        DBObject sort = new BasicDBObject("$sort", new BasicDBObject("_id", 1));
+        final DBObject sort = new BasicDBObject("$sort", new BasicDBObject("_id", 1));
 
         AggregationOutput output;
         try {
             output = getStatisticsCollection().aggregate(match, unwind, group, sort);
-            for (DBObject result : output.results()) {
-                List<FailureCause> failureCauses = new ArrayList<FailureCause>();
-                Integer buildNumber = (Integer)result.get("_id");
-                BasicDBList failureCauseRefs = (BasicDBList)result.get("failureCauses");
-                for (Object o : failureCauseRefs) {
-                    DBRef failureRef = (DBRef)o;
-                    String id = failureRef.getId().toString();
-                    FailureCause failureCause = getCause(id);
+            for (final DBObject result : output.results()) {
+                final List<FailureCause> failureCauses = new ArrayList<FailureCause>();
+                final Integer buildNumber = (Integer)result.get("_id");
+                final BasicDBList failureCauseRefs = (BasicDBList)result.get("failureCauses");
+                for (final Object o : failureCauseRefs) {
+                    final DBRef failureRef = (DBRef)o;
+                    final String id = failureRef.getId().toString();
+                    final FailureCause failureCause = getCause(id);
                     failureCauses.add(failureCause);
                 }
 
                 nbrOfFailureCausesPerBuild.put(buildNumber, failureCauses);
             }
-        } catch (Exception e) {
+        } catch (final Exception e) {
             logger.fine("Unable to count failure causes by build");
             e.printStackTrace();
         }
@@ -827,7 +749,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @return DBObject to be used for time grouping
      */
     private DBObject generateTimeGrouping(int intervalSize) {
-        DBObject timeFields = new BasicDBObject();
+        final DBObject timeFields = new BasicDBObject();
         if (intervalSize == Calendar.HOUR_OF_DAY) {
             timeFields.put("hour", new BasicDBObject("$hour", "$startingTime"));
         }
@@ -847,11 +769,11 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      * @return TimePeriod
      */
     private TimePeriod generateTimePeriodFromResult(DBObject result, int intervalSize) {
-        BasicDBObject groupedAttrs = (BasicDBObject)result.get("_id");
-        int month = groupedAttrs.getInt("month");
-        int year = groupedAttrs.getInt("year");
+        final BasicDBObject groupedAttrs = (BasicDBObject)result.get("_id");
+        final int month = groupedAttrs.getInt("month");
+        final int year = groupedAttrs.getInt("year");
 
-        Calendar c = Calendar.getInstance();
+        final Calendar c = Calendar.getInstance();
         c.set(Calendar.YEAR, year);
         c.set(Calendar.MONTH, month - 1);
         // MongoDB timezone is UTC:
@@ -859,14 +781,14 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
         TimePeriod period;
         if (intervalSize == Calendar.HOUR_OF_DAY) {
-            int dayOfMonth = groupedAttrs.getInt("dayOfMonth");
+            final int dayOfMonth = groupedAttrs.getInt("dayOfMonth");
             c.set(Calendar.DAY_OF_MONTH, dayOfMonth);
-            int hour = groupedAttrs.getInt("hour");
+            final int hour = groupedAttrs.getInt("hour");
             c.set(Calendar.HOUR_OF_DAY, hour);
 
             period = new Hour(c.getTime());
         } else if (intervalSize == Calendar.DATE) {
-            int dayOfMonth = groupedAttrs.getInt("dayOfMonth");
+            final int dayOfMonth = groupedAttrs.getInt("dayOfMonth");
             c.set(Calendar.DAY_OF_MONTH, dayOfMonth);
 
             period = new Day(c.getTime());
@@ -879,38 +801,38 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public List<FailureCauseTimeInterval> getFailureCausesPerTime(int intervalSize, GraphFilterBuilder filter,
             boolean byCategories) {
-        List<FailureCauseTimeInterval> failureCauseIntervals = new ArrayList<FailureCauseTimeInterval>();
-        Map<MultiKey, FailureCauseTimeInterval> categoryTable = new HashMap<MultiKey, FailureCauseTimeInterval>();
+        final List<FailureCauseTimeInterval> failureCauseIntervals = new ArrayList<FailureCauseTimeInterval>();
+        final Map<MultiKey, FailureCauseTimeInterval> categoryTable = new HashMap<MultiKey, FailureCauseTimeInterval>();
 
-        DBObject matchFields = generateMatchFields(filter);
-        DBObject match = new BasicDBObject("$match", matchFields);
+        final DBObject matchFields = generateMatchFields(filter);
+        final DBObject match = new BasicDBObject("$match", matchFields);
 
-        DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
+        final DBObject unwind = new BasicDBObject("$unwind", "$failureCauses");
 
-        DBObject idFields = generateTimeGrouping(intervalSize);
+        final DBObject idFields = generateTimeGrouping(intervalSize);
         idFields.put("failureCause", "$failureCauses.failureCause");
-        DBObject groupFields = new BasicDBObject();
+        final DBObject groupFields = new BasicDBObject();
         groupFields.put("_id", idFields);
         groupFields.put("number", new BasicDBObject("$sum", 1));
-        DBObject group = new BasicDBObject("$group", groupFields);
+        final DBObject group = new BasicDBObject("$group", groupFields);
 
         AggregationOutput output;
         try {
             output = getStatisticsCollection().aggregate(match, unwind, group);
-            for (DBObject result : output.results()) {
-                int number = (Integer)result.get("number");
+            for (final DBObject result : output.results()) {
+                final int number = (Integer)result.get("number");
 
-                TimePeriod period = generateTimePeriodFromResult(result, intervalSize);
+                final TimePeriod period = generateTimePeriodFromResult(result, intervalSize);
 
-                BasicDBObject groupedAttrs = (BasicDBObject)result.get("_id");
-                DBRef failureRef = (DBRef)groupedAttrs.get("failureCause");
-                String id = failureRef.getId().toString();
-                FailureCause failureCause = getCause(id);
+                final BasicDBObject groupedAttrs = (BasicDBObject)result.get("_id");
+                final DBRef failureRef = (DBRef)groupedAttrs.get("failureCause");
+                final String id = failureRef.getId().toString();
+                final FailureCause failureCause = getCause(id);
 
                 if (byCategories) {
                     if (failureCause.getCategories() != null) {
-                        for (String category : failureCause.getCategories()) {
-                            MultiKey multiKey = new MultiKey(category, period);
+                        for (final String category : failureCause.getCategories()) {
+                            final MultiKey multiKey = new MultiKey(category, period);
                             FailureCauseTimeInterval interval = categoryTable.get(multiKey);
                             if (interval == null) {
                                 interval = new FailureCauseTimeInterval(period, category, number);
@@ -922,15 +844,15 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
                         }
                     }
                 } else {
-                    FailureCauseTimeInterval timeInterval = new FailureCauseTimeInterval(period, failureCause.getName(),
+                    final FailureCauseTimeInterval timeInterval = new FailureCauseTimeInterval(period, failureCause.getName(),
                             failureCause.getId(), number);
                     failureCauseIntervals.add(timeInterval);
                 }
             }
-        } catch (UnknownHostException e) {
+        } catch (final UnknownHostException e) {
             logger.fine("Unable to get failure causes by time");
             e.printStackTrace();
-        } catch (AuthenticationException e) {
+        } catch (final AuthenticationException e) {
             logger.fine("Unable to get failure causes by time");
             e.printStackTrace();
         }
@@ -941,16 +863,16 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     @Override
     public List<ObjectCountPair<String>> getNbrOfFailureCategoriesPerName(GraphFilterBuilder filter, int limit) {
 
-        List<ObjectCountPair<String>> nbrOfFailureCausesPerId = getNbrOfFailureCausesPerId(filter, 0);
-        Map<String, Integer> nbrOfFailureCategoriesPerName = new HashMap<String, Integer>();
+        final List<ObjectCountPair<String>> nbrOfFailureCausesPerId = getNbrOfFailureCausesPerId(filter, 0);
+        final Map<String, Integer> nbrOfFailureCategoriesPerName = new HashMap<String, Integer>();
 
-        for (ObjectCountPair<String> countPair : nbrOfFailureCausesPerId) {
-            String id = countPair.getObject();
-            int count = countPair.getCount();
+        for (final ObjectCountPair<String> countPair : nbrOfFailureCausesPerId) {
+            final String id = countPair.getObject();
+            final int count = countPair.getCount();
             FailureCause failureCause = null;
             try {
                 failureCause = getCause(id);
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 logger.fine("Unable to count failure causes by name");
                 e.printStackTrace();
             }
@@ -963,7 +885,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
                     currentNbr += count;
                     nbrOfFailureCategoriesPerName.put(null, currentNbr);
                 } else {
-                    for (String category : failureCause.getCategories()) {
+                    for (final String category : failureCause.getCategories()) {
                         Integer currentNbr = nbrOfFailureCategoriesPerName.get(category);
                         if (currentNbr == null) {
                             currentNbr = 0;
@@ -975,9 +897,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             }
         }
         List<ObjectCountPair<String>> countList = new ArrayList<ObjectCountPair<String>>();
-        for (Entry<String, Integer> entry : nbrOfFailureCategoriesPerName.entrySet()) {
-            String name = entry.getKey();
-            int count = entry.getValue();
+        for (final Entry<String, Integer> entry : nbrOfFailureCategoriesPerName.entrySet()) {
+            final String name = entry.getKey();
+            final int count = entry.getValue();
             countList.add(new ObjectCountPair<String>(name, count));
         }
         Collections.sort(countList, ObjectCountPair.countComparator());
@@ -990,11 +912,11 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
 
     @Override
     public void removeBuildfailurecause(Run build) throws Exception {
-        BasicDBObject searchObj = new BasicDBObject();
+        final BasicDBObject searchObj = new BasicDBObject();
         searchObj.put("projectName", build.getParent().getFullName());
         searchObj.put("buildNumber", build.getNumber());
         searchObj.put("master", BfaUtils.getMasterName());
-        com.mongodb.DBCursor dbcursor = getStatisticsCollection().find(searchObj);
+        final com.mongodb.DBCursor dbcursor = getStatisticsCollection().find(searchObj);
         if (dbcursor != null && dbcursor.size() > 0) {
             while (dbcursor.hasNext()) {
                 getStatisticsCollection().remove(dbcursor.next());
@@ -1016,14 +938,14 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
     private void addFailureCausesToDBObject(DBObject object, List<FailureCauseStatistics> failureCauseStatisticsList)
             throws UnknownHostException, AuthenticationException {
         if (failureCauseStatisticsList != null && !failureCauseStatisticsList.isEmpty()) {
-            List<DBObject> failureCauseStatisticsObjects = new LinkedList<DBObject>();
+            final List<DBObject> failureCauseStatisticsObjects = new LinkedList<DBObject>();
 
-            for (FailureCauseStatistics failureCauseStatistics : failureCauseStatisticsList) {
-                DBObject failureCauseStatisticsObject = new BasicDBObject();
-                ObjectId id = new ObjectId(failureCauseStatistics.getId());
-                DBRef failureCauseRef = new DBRef(getDb(), COLLECTION_NAME, id);
+            for (final FailureCauseStatistics failureCauseStatistics : failureCauseStatisticsList) {
+                final DBObject failureCauseStatisticsObject = new BasicDBObject();
+                final ObjectId id = new ObjectId(failureCauseStatistics.getId());
+                final DBRef failureCauseRef = new DBRef(getDb(), COLLECTION_NAME, id);
                 failureCauseStatisticsObject.put("failureCause", failureCauseRef);
-                List<FoundIndication> foundIndicationList = failureCauseStatistics.getIndications();
+                final List<FoundIndication> foundIndicationList = failureCauseStatistics.getIndications();
                 addIndicationsToDBObject(failureCauseStatisticsObject, foundIndicationList);
                 failureCauseStatisticsObjects.add(failureCauseStatisticsObject);
             }
@@ -1038,9 +960,9 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
      */
     private void addIndicationsToDBObject(DBObject object, List<FoundIndication> indications) {
         if (indications != null && !indications.isEmpty()) {
-            List<DBObject> foundIndicationObjects = new LinkedList<DBObject>();
-            for (FoundIndication foundIndication : indications) {
-                DBObject foundIndicationObject = new BasicDBObject();
+            final List<DBObject> foundIndicationObjects = new LinkedList<DBObject>();
+            for (final FoundIndication foundIndication : indications) {
+                final DBObject foundIndicationObject = new BasicDBObject();
                 foundIndicationObject.put("pattern", foundIndication.getPattern());
                 foundIndicationObject.put("matchingFile", foundIndication.getMatchingFile());
                 foundIndicationObject.put("matchingString", foundIndication.getMatchingString());
@@ -1078,7 +1000,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             db = getMongoConnection().getDB(dbName);
         }
         if (Util.fixEmpty(userName) != null && Util.fixEmpty(Secret.toString(password)) != null) {
-            char[] pwd = password.getPlainText().toCharArray();
+            final char[] pwd = password.getPlainText().toCharArray();
             if (!db.authenticate(userName, pwd)) {
                 throw new AuthenticationException("Could not athenticate with the mongo database");
             }
@@ -1175,7 +1097,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             if (Util.fixEmpty(value) == null) {
                 return FormValidation.error("Please provide a host name!");
             } else {
-                Matcher m = Pattern.compile("\\s").matcher(value);
+                final Matcher m = Pattern.compile("\\s").matcher(value);
                 if (m.find()) {
                     return FormValidation.error("Host name contains white space!");
                 }
@@ -1193,7 +1115,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             try {
                 Long.parseLong(value);
                 return FormValidation.ok();
-            } catch (NumberFormatException e) {
+            } catch (final NumberFormatException e) {
                 return FormValidation.error("Please provide a port number!");
             }
         }
@@ -1208,7 +1130,7 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
             if (value == null || value.isEmpty()) {
                 return FormValidation.error("Please provide a database name!");
             } else {
-                Matcher m = Pattern.compile("\\s").matcher(value);
+                final Matcher m = Pattern.compile("\\s").matcher(value);
                 if (m.find()) {
                     return FormValidation.error("Database name contains white space!");
                 }
@@ -1232,11 +1154,11 @@ public class MongoDBKnowledgeBase extends KnowledgeBase {
                 @QueryParameter("dbName") final String dbName,
                 @QueryParameter("userName") final String userName,
                 @QueryParameter("password") final String password) {
-            MongoDBKnowledgeBase base = new MongoDBKnowledgeBase(host, port, dbName, userName,
+            final MongoDBKnowledgeBase base = new MongoDBKnowledgeBase(host, port, dbName, userName,
                     Secret.fromString(password), false, false);
             try {
                 base.getCollection();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 return FormValidation.error(e, Messages.MongoDBKnowledgeBase_ConnectionError());
             }
             return FormValidation.ok(Messages.MongoDBKnowledgeBase_ConnectionOK());
