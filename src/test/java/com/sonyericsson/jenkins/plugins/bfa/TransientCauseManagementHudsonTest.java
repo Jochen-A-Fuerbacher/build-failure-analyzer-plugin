@@ -25,27 +25,33 @@
 
 package com.sonyericsson.jenkins.plugins.bfa;
 
-import com.gargoylesoftware.htmlunit.ElementNotFoundException;
-import com.gargoylesoftware.htmlunit.html.DomNodeList;
-import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
-import com.gargoylesoftware.htmlunit.html.HtmlElement;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
-import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseBuildAction;
-import hudson.model.Cause;
-import hudson.model.FreeStyleBuild;
-import hudson.model.FreeStyleProject;
-import hudson.model.Result;
-import hudson.tasks.Shell;
-import org.jvnet.hudson.test.HudsonTestCase;
-import org.jvnet.hudson.test.MockBuilder;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.containsString;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.JenkinsRule.WebClient;
+import org.jvnet.hudson.test.MockBuilder;
+
+import com.gargoylesoftware.htmlunit.ElementNotFoundException;
+import com.gargoylesoftware.htmlunit.html.DomElement;
+import com.gargoylesoftware.htmlunit.html.DomNodeList;
+import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
+import com.gargoylesoftware.htmlunit.html.HtmlPage;
+import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseBuildAction;
+
+import hudson.model.Cause;
+import hudson.model.FreeStyleBuild;
+import hudson.model.FreeStyleProject;
+import hudson.model.Item;
+import hudson.model.Result;
+import hudson.tasks.Shell;
 
 //CS IGNORE MagicNumber FOR NEXT 300 LINES. REASON: TestData.
 
@@ -54,7 +60,13 @@ import static org.hamcrest.Matchers.containsString;
  *
  * @author Robert Sandell &lt;robert.sandell@sonyericsson.com&gt;
  */
-public class TransientCauseManagementHudsonTest extends HudsonTestCase {
+public class TransientCauseManagementHudsonTest {
+	/**
+     * The Jenkins Rule.
+     */
+    @Rule
+    //CS IGNORE VisibilityModifier FOR NEXT 1 LINES. REASON: Jenkins Rule
+    public JenkinsRule j = new JenkinsRule();
 
     /**
      * Tests that the {@link CauseManagement} link is present on a freestyle project and that you can navigate to it.
@@ -62,17 +74,17 @@ public class TransientCauseManagementHudsonTest extends HudsonTestCase {
      * @throws Exception if so.
      */
     public void testOnAProject() throws Exception {
-        FreeStyleProject project = createFreeStyleProject("nils-job");
+        FreeStyleProject project = j.createFreeStyleProject("nils-job");
         project.getBuildersList().add(new Shell("env | sort"));
-        project = configRoundtrip(project);
-        WebClient web = createWebClient();
-        HtmlPage page = web.goTo("/" + project.getUrl());
+        Item item = j.<Item>configRoundtrip(project);
+        WebClient web = j.createWebClient();
+        HtmlPage page = web.goTo("/" + item.getUrl());
         try {
             HtmlAnchor anchor = getAnchorBySuffix(page, CauseManagement.URL_NAME);
             HtmlPage configPage = anchor.click();
             verifyIsConfigurationPage(configPage);
         } catch (ElementNotFoundException e) {
-            fail("The link should be there! " + e.getMessage());
+            Assert.fail("The link should be there! " + e.getMessage());
         }
     }
 
@@ -82,18 +94,18 @@ public class TransientCauseManagementHudsonTest extends HudsonTestCase {
      * @throws Exception if so.
      */
     public void testOnABuild() throws Exception {
-        FreeStyleProject project = createFreeStyleProject("nils-job");
+        FreeStyleProject project = j.createFreeStyleProject("nils-job");
         project.getBuildersList().add(new MockBuilder(Result.FAILURE));
         Future<FreeStyleBuild> future = project.scheduleBuild2(0, new Cause.UserCause());
         FreeStyleBuild build = future.get(10, TimeUnit.SECONDS);
-        WebClient web = createWebClient();
+        WebClient web = j.createWebClient();
         HtmlPage page = web.goTo("/" + build.getUrl());
         try {
             HtmlAnchor anchor = getAnchorBySuffix(page, FailureCauseBuildAction.URL_NAME);
             HtmlPage configPage = anchor.click();
             verifyIsConfigurationPage(configPage);
         } catch (ElementNotFoundException e) {
-            fail("The link should be there! " + e.getMessage());
+            Assert.fail("The link should be there! " + e.getMessage());
         }
     }
 
@@ -129,19 +141,19 @@ public class TransientCauseManagementHudsonTest extends HudsonTestCase {
             //Some smoke test to see if it is the correct page
             HtmlAnchor newAnchor = getAnchorBySuffix(page, "new");
             assertThat("New Cause link is missing it's icon.",
-                    newAnchor.getStyleAttribute(), containsString("newinformation.png"));
-            DomNodeList<HtmlElement> elementsByTagName = page.getElementsByTagName("h1");
+                    newAnchor.getAttribute("style"), containsString("newinformation.png"));
+            DomNodeList<DomElement> elementsByTagName = page.getElementsByTagName("h1");
             boolean headingFound = false;
-            for (HtmlElement element : elementsByTagName) {
+            for (DomElement element : elementsByTagName) {
                 if ("Update Failure Causes".equals(element.getTextContent())) {
                     headingFound = true;
                     break;
                 }
             }
-            assertTrue("H1 Heading not found!", headingFound);
+            Assert.assertTrue("H1 Heading not found!", headingFound);
 
         } catch (ElementNotFoundException e) {
-            fail("The element should be there! " + e.getMessage());
+            Assert.fail("The element should be there! " + e.getMessage());
         }
     }
 }

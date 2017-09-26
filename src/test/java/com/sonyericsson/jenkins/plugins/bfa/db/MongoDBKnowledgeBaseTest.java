@@ -70,7 +70,7 @@ public class MongoDBKnowledgeBaseTest {
 
     private JacksonDBCollection<FailureCause, String> collection;
     private JacksonDBCollection<Statistics, String> statisticsCollection;
-    private MongoDBKnowledgeBase kb;
+    private CachedKnowledgeBase kb;
     private List<Indication> indications;
     private Indication indication;
     private FailureCause mockedCause;
@@ -138,7 +138,7 @@ public class MongoDBKnowledgeBaseTest {
     public void testAddCause() throws Exception {
         WriteResult<FailureCause, String> result = mock(WriteResult.class);
         when(result.getSavedObject()).thenReturn(mockedCause);
-        MongoDBKnowledgeBaseCache cache = mock(MongoDBKnowledgeBaseCache.class);
+        DBKnowledgeBaseCache cache = mock(MongoDBKnowledgeBaseCache.class);
         Whitebox.setInternalState(kb, cache);
         doReturn(result).when(collection).insert(Matchers.<FailureCause>any());
         FailureCause addedCause = kb.addCause(mockedCause);
@@ -155,7 +155,7 @@ public class MongoDBKnowledgeBaseTest {
     public void testSaveCause() throws Exception {
         WriteResult<FailureCause, String> result = mock(WriteResult.class);
         when(result.getSavedObject()).thenReturn(mockedCause);
-        MongoDBKnowledgeBaseCache cache = mock(MongoDBKnowledgeBaseCache.class);
+        DBKnowledgeBaseCache cache = mock(MongoDBKnowledgeBaseCache.class);
         Whitebox.setInternalState(kb, cache);
         doReturn(result).when(collection).save(Matchers.<FailureCause>any());
         FailureCause addedCause = kb.saveCause(mockedCause);

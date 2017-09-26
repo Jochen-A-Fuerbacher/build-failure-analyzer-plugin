@@ -24,6 +24,23 @@
 
 package com.sonyericsson.jenkins.plugins.bfa;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.isA;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.kohsuke.stapler.StaplerRequest;
+import org.powermock.reflect.Whitebox;
+
 import com.gargoylesoftware.htmlunit.html.DomNode;
 import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
@@ -38,25 +55,9 @@ import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.BuildLogIndication;
 import com.sonyericsson.jenkins.plugins.bfa.sod.ScanOnDemandVariables;
 import com.sonyericsson.jenkins.plugins.bfa.test.utils.DifferentKnowledgeBase;
+
 import hudson.ExtensionList;
 import net.sf.json.JSONObject;
-import org.junit.Rule;
-import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-import org.kohsuke.stapler.StaplerRequest;
-import org.powermock.reflect.Whitebox;
-
-import java.util.List;
-
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.isA;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * TestCases for {@link PluginImpl}.
@@ -224,7 +225,7 @@ public class PluginImplHudsonTest {
         HtmlTable table = page.getDocumentElement().getOneHtmlElementByAttribute("table", "name", "knowledgeBase");
         assertSame("The table should be inside the dropDownContainer", container, table.getParentNode().getParentNode());
         HtmlTableCell cell = table.getCellAt(1, 2);
-        HtmlTextInput someStringInput = (HtmlTextInput)cell.getAllHtmlChildElements().iterator().next();
+        HtmlTextInput someStringInput = (HtmlTextInput)cell.getChildElements().iterator().next();
         assertEquals(knowledgeBase.getSomeString(), someStringInput.getText());
     }
 

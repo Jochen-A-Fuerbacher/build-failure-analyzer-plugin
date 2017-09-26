@@ -23,6 +23,15 @@
  */
 package com.sonyericsson.jenkins.plugins.bfa.sod;
 
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.MockBuilder;
+
 import com.gargoylesoftware.htmlunit.ElementNotFoundException;
 import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
@@ -30,26 +39,14 @@ import com.sonyericsson.jenkins.plugins.bfa.PluginImpl;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseBuildAction;
 import com.sonyericsson.jenkins.plugins.bfa.model.ScannerJobProperty;
 import com.sonyericsson.jenkins.plugins.bfa.test.utils.PrintToLogBuilder;
+
 import hudson.model.FreeStyleBuild;
 import hudson.model.FreeStyleProject;
 import hudson.model.Item;
 import hudson.model.Result;
 import hudson.security.GlobalMatrixAuthorizationStrategy;
 import hudson.security.SecurityRealm;
-
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
 import jenkins.model.Jenkins;
-import org.junit.Rule;
-import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-import org.jvnet.hudson.test.MockBuilder;
-
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 //CS IGNORE MagicNumber FOR NEXT 100 LINES. REASON: TestData.
 
@@ -74,19 +71,19 @@ public class ScanOnDemandBaseActionTest {
      */
     @Test
     public void testPerformScanFailedProject() throws Exception {
-        FreeStyleProject project = j.createFreeStyleProject();
+        final FreeStyleProject project = j.createFreeStyleProject();
         project.getBuildersList().add(new PrintToLogBuilder(TO_PRINT));
         project.getBuildersList().add(new MockBuilder(Result.FAILURE));
-        Future<FreeStyleBuild> future = project.scheduleBuild2(0);
-        FreeStyleBuild build = future.get(10, TimeUnit.SECONDS);
+        final Future<FreeStyleBuild> future = project.scheduleBuild2(0);
+        final FreeStyleBuild build = future.get(10, TimeUnit.SECONDS);
         if (build.getAction(FailureCauseBuildAction.class) != null) {
             build.getActions().remove(build.getAction(FailureCauseBuildAction.class));
         }
-        assertNull(build.getAction(FailureCauseBuildAction.class));
+        Assert.assertNull(build.getAction(FailureCauseBuildAction.class));
         j.assertBuildStatus(Result.FAILURE, build);
         j.createWebClient().getPage(project, "scan-on-demand/nonscanned/performScan");
         ScanOnDemandQueue.shutdown();
-        assertNotNull(build.getAction(FailureCauseBuildAction.class));
+        Assert.assertNotNull(build.getAction(FailureCauseBuildAction.class));
 
     }
 
@@ -97,18 +94,18 @@ public class ScanOnDemandBaseActionTest {
      */
     @Test
     public void testPerformScanSuccessProject() throws Exception {
-        FreeStyleProject project = j.createFreeStyleProject();
+        final FreeStyleProject project = j.createFreeStyleProject();
         project.getBuildersList().add(new MockBuilder(Result.SUCCESS));
-        Future<FreeStyleBuild> future = project.scheduleBuild2(0);
-        FreeStyleBuild build = future.get(10, TimeUnit.SECONDS);
+        final Future<FreeStyleBuild> future = project.scheduleBuild2(0);
+        final FreeStyleBuild build = future.get(10, TimeUnit.SECONDS);
         if (build.getAction(FailureCauseBuildAction.class) != null) {
             build.getActions().remove(build.getAction(FailureCauseBuildAction.class));
         }
-        assertNull(build.getAction(FailureCauseBuildAction.class));
+        Assert.assertNull(build.getAction(FailureCauseBuildAction.class));
         j.assertBuildStatus(Result.SUCCESS, build);
         j.createWebClient().getPage(project, "scan-on-demand/nonscanned/performScan");
         ScanOnDemandQueue.shutdown();
-        assertNull(build.getAction(FailureCauseBuildAction.class));
+        Assert.assertNull(build.getAction(FailureCauseBuildAction.class));
     }
 
     /**
@@ -119,12 +116,12 @@ public class ScanOnDemandBaseActionTest {
      */
     @Test
     public void testShouldOnlyShowWhenHasPermission() throws Exception {
-        FreeStyleProject project = j.createFreeStyleProject();
-        String expectedHref = "/jenkins/" + project.getUrl() + "scan-on-demand";
+        final FreeStyleProject project = j.createFreeStyleProject();
+        final String expectedHref = "/jenkins/" + project.getUrl() + "scan-on-demand";
 
-        SecurityRealm securityRealm = j.createDummySecurityRealm();
+        final SecurityRealm securityRealm = j.createDummySecurityRealm();
         Jenkins.getInstance().setSecurityRealm(securityRealm);
-        GlobalMatrixAuthorizationStrategy strategy = new GlobalMatrixAuthorizationStrategy();
+        final GlobalMatrixAuthorizationStrategy strategy = new GlobalMatrixAuthorizationStrategy();
         strategy.add(Jenkins.READ, "anonymous");
         strategy.add(Item.CONFIGURE, "bobby");
         strategy.add(Item.READ, "bobby");
@@ -138,9 +135,9 @@ public class ScanOnDemandBaseActionTest {
 
         HtmlPage page = client.login("alice").getPage(project);
         try {
-            HtmlAnchor anchor = page.getAnchorByHref(expectedHref);
-            fail("Alice can see the link!");
-        } catch (ElementNotFoundException e) {
+            final HtmlAnchor anchor = page.getAnchorByHref(expectedHref);
+            Assert.fail("Alice can see the link!");
+        } catch (final ElementNotFoundException e) {
             System.out.println("Didn't find the link == good!");
         }
 
@@ -148,8 +145,8 @@ public class ScanOnDemandBaseActionTest {
 
         client = client.login("bobby");
         page = client.getPage(project);
-        HtmlAnchor anchor = page.getAnchorByHref(expectedHref);
-        assertNotNull(anchor);
+        final HtmlAnchor anchor = page.getAnchorByHref(expectedHref);
+        Assert.assertNotNull(anchor);
     }
 
     /**
@@ -159,28 +156,28 @@ public class ScanOnDemandBaseActionTest {
      */
     @Test
     public void testShouldOnlyShowWhenScanningIsEnabled() throws Exception {
-        FreeStyleProject project = j.createFreeStyleProject();
-        project = j.configRoundtrip(project);
-        String expectedHref = "/jenkins/" + project.getUrl() + "scan-on-demand";
+        final FreeStyleProject project = j.createFreeStyleProject();
+        j.<Item>configRoundtrip(project);
+        final String expectedHref = "/jenkins/" + project.getUrl() + "scan-on-demand";
 
-        JenkinsRule.WebClient client = j.createWebClient();
+        final JenkinsRule.WebClient client = j.createWebClient();
 
         //Assert visible
         HtmlPage page = client.getPage(project);
         HtmlAnchor anchor = page.getAnchorByHref(expectedHref);
-        assertNotNull(anchor);
+        Assert.assertNotNull(anchor);
 
         //Assert gone when disabled
         project.removeProperty(ScannerJobProperty.class);
         project.addProperty(new ScannerJobProperty(true));
         //Just check it in case...
-        assertFalse(PluginImpl.shouldScan(project));
+        Assert.assertFalse(PluginImpl.shouldScan(project));
 
         page = client.getPage(project);
         try {
             anchor = page.getAnchorByHref(expectedHref);
-            fail("We can see the link!");
-        } catch (ElementNotFoundException e) {
+            Assert.fail("We can see the link!");
+        } catch (final ElementNotFoundException e) {
             System.out.println("Didn't find the link == good!");
         }
     }

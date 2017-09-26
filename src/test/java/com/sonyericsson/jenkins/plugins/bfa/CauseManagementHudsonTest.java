@@ -24,6 +24,33 @@
 
 package com.sonyericsson.jenkins.plugins.bfa;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.not;
+import static org.junit.Assert.assertThat;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Matchers.same;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.text.DateFormat;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
+
+import javax.servlet.http.HttpSession;
+
+import org.apache.commons.lang.StringUtils;
+import org.jvnet.hudson.test.HudsonTestCase;
+import org.kohsuke.stapler.StaplerRequest;
+import org.kohsuke.stapler.StaplerResponse;
+import org.powermock.reflect.Whitebox;
+
 import com.gargoylesoftware.htmlunit.html.HtmlAnchor;
 import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HtmlForm;
@@ -37,34 +64,10 @@ import com.sonyericsson.jenkins.plugins.bfa.model.FailureCause;
 import com.sonyericsson.jenkins.plugins.bfa.model.FailureCauseModification;
 import com.sonyericsson.jenkins.plugins.bfa.model.ScannerJobProperty;
 import com.sonyericsson.jenkins.plugins.bfa.model.indication.BuildLogIndication;
+
 import hudson.Util;
 import hudson.model.FreeStyleProject;
 import hudson.util.Secret;
-import org.apache.commons.lang.StringUtils;
-import org.jvnet.hudson.test.HudsonTestCase;
-import org.kohsuke.stapler.StaplerRequest;
-import org.kohsuke.stapler.StaplerResponse;
-import org.powermock.reflect.Whitebox;
-
-import javax.servlet.http.HttpSession;
-import java.text.DateFormat;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
-
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.not;
-import static org.junit.Assert.assertThat;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Matchers.same;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 /**
  * Hudson tests for {@link CauseManagement}.
@@ -123,7 +126,7 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
 
         WebClient web = createWebClient();
         HtmlPage page = web.goTo(CauseManagement.URL_NAME);
-        HtmlTable table = (HtmlTable)page.getElementById("failureCausesTable");
+        HtmlTable table = (HtmlTable)page.getHtmlElementById("failureCausesTable");
 
         Collection<FailureCause> expectedCauses = kb.getShallowCauses();
 
@@ -201,7 +204,7 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
         WebClient web = createWebClient();
         HtmlPage page = web.goTo(CauseManagement.URL_NAME);
 
-        HtmlTable table = (HtmlTable)page.getElementById("failureCausesTable");
+        HtmlTable table = (HtmlTable)page.getHtmlElementById("failureCausesTable");
         HtmlTableRow row = table.getRow(1);
         final String firstModification = row.getCell(MODIFIED_CELL).getTextContent();
 
@@ -213,7 +216,7 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
         HtmlForm form = editPage.getFormByName("causeForm");
         page = submit(form);
 
-        table = (HtmlTable)page.getElementById("failureCausesTable");
+        table = (HtmlTable)page.getHtmlElementById("failureCausesTable");
         row = table.getRow(1);
         final String secondModification = row.getCell(MODIFIED_CELL).getTextContent();
 
@@ -236,12 +239,12 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
         WebClient web = createWebClient();
         HtmlPage page = web.goTo(CauseManagement.URL_NAME);
 
-        HtmlTable table = (HtmlTable)page.getElementById("failureCausesTable");
+        HtmlTable table = (HtmlTable)page.getHtmlElementById("failureCausesTable");
 
         HtmlAnchor firstCauseLink = (HtmlAnchor)table.getCellAt(1, 0).getFirstChild();
         HtmlPage editPage = firstCauseLink.click();
 
-        HtmlElement modList = editPage.getElementById("modifications");
+        HtmlElement modList = editPage.getHtmlElementById("modifications");
         int firstNbrOfModifications = modList.getChildNodes().size();
 
         editPage.getElementByName("_.comment").setTextContent("new comment");
@@ -250,7 +253,7 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
         submit(form);
 
         editPage = firstCauseLink.click();
-        modList = editPage.getElementById("modifications");
+        modList = editPage.getHtmlElementById("modifications");
         int secondNbrOfModifications = modList.getChildNodes().size();
 
         assertEquals(firstNbrOfModifications + 1, secondNbrOfModifications);
@@ -270,7 +273,7 @@ public class CauseManagementHudsonTest extends HudsonTestCase {
         Whitebox.setInternalState(PluginImpl.getInstance(), kb);
         WebClient web = createWebClient();
         HtmlPage page = web.goTo(CauseManagement.URL_NAME);
-        HtmlElement element =  page.getElementById("errorMessage");
+        HtmlElement element =  page.getHtmlElementById("errorMessage");
         assertNotNull(element);
     }
 

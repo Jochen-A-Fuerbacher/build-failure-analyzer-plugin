@@ -24,6 +24,39 @@
 
 package com.sonyericsson.jenkins.plugins.bfa;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.argThat;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
+import java.util.StringTokenizer;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.jvnet.hudson.test.JenkinsRule;
+import org.jvnet.hudson.test.MockBuilder;
+import org.jvnet.hudson.test.TestBuilder;
+import org.mockito.ArgumentMatcher;
+import org.mockito.Matchers;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.powermock.reflect.Whitebox;
+
 import com.gargoylesoftware.htmlunit.html.HtmlElement;
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
 import com.sonyericsson.hudson.plugins.gerrit.trigger.gerritnotifier.ToGerritRunListener;
@@ -40,6 +73,7 @@ import com.sonyericsson.jenkins.plugins.bfa.model.indication.MultilineBuildLogIn
 import com.sonyericsson.jenkins.plugins.bfa.statistics.FailureCauseStatistics;
 import com.sonyericsson.jenkins.plugins.bfa.statistics.Statistics;
 import com.sonyericsson.jenkins.plugins.bfa.test.utils.PrintToLogBuilder;
+
 import hudson.Launcher;
 import hudson.model.AbstractBuild;
 import hudson.model.BuildListener;
@@ -50,38 +84,6 @@ import hudson.model.Result;
 import hudson.model.listeners.RunListener;
 import hudson.tasks.junit.JUnitResultArchiver;
 import jenkins.model.Jenkins;
-import org.junit.Rule;
-import org.junit.Test;
-import org.jvnet.hudson.test.JenkinsRule;
-import org.jvnet.hudson.test.MockBuilder;
-import org.jvnet.hudson.test.TestBuilder;
-import org.mockito.ArgumentMatcher;
-import org.mockito.Matchers;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
-import org.powermock.reflect.Whitebox;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.StringTokenizer;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.mockito.Matchers.argThat;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 //CS IGNORE MagicNumber FOR NEXT 1000 LINES. REASON: TestData.
 
@@ -137,7 +139,7 @@ public class BuildFailureScannerHudsonTest {
         assertEquals(FORMATTED_DESCRIPTION, foundFailureCause.getDescription());
         FoundIndication foundIndication = foundFailureCause.getIndications().get(0);
         String id = foundIndication.getMatchingHash() + foundFailureCause.getId();
-        HtmlElement focus = document.getElementById(id);
+        HtmlElement focus = page.getHtmlElementById(id);
         assertNotNull(focus);
 
         List<HtmlElement> errorElements = document.getElementsByAttribute("span", "title", foundFailureCause.getName());
@@ -176,7 +178,7 @@ public class BuildFailureScannerHudsonTest {
         assertEquals(FORMATTED_DESCRIPTION, foundFailureCause.getDescription());
         FoundIndication foundIndication = foundFailureCause.getIndications().get(0);
         String id = foundIndication.getMatchingHash() + foundFailureCause.getId();
-        HtmlElement focus = document.getElementById(id);
+        HtmlElement focus = page.getHtmlElementById(id);
         assertNotNull(focus);
 
         List<HtmlElement> errorElements = document.getElementsByAttribute("span", "title", foundFailureCause.getName());
@@ -228,7 +230,7 @@ public class BuildFailureScannerHudsonTest {
         assertTrue(causeDescriptions.remove(description));
         FoundIndication foundIndication = foundFailureCause.getIndications().get(0);
         String id = foundIndication.getMatchingHash() + foundFailureCause.getId();
-        HtmlElement focus = document.getElementById(id);
+        HtmlElement focus = page.getHtmlElementById(id);
         assertNotNull(focus);
 
         foundFailureCause = causeListFromAction.get(1);
@@ -236,7 +238,7 @@ public class BuildFailureScannerHudsonTest {
         assertTrue(causeDescriptions.remove(description));
         foundIndication = foundFailureCause.getIndications().get(0);
         id = foundIndication.getMatchingHash() + foundFailureCause.getId();
-        focus = document.getElementById(id);
+        focus = page.getHtmlElementById(id);
         assertNotNull(focus);
         assertTrue(causeDescriptions.isEmpty());
 
@@ -509,7 +511,8 @@ public class BuildFailureScannerHudsonTest {
 
         project.getBuildersList().add(new PrintToLogBuilder(BUILD_LOG));
         project.getBuildersList().add(new TestBuilder() {
-            public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
+            @Override
+			public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
                     BuildListener listener) throws InterruptedException, IOException {
                 build.getWorkspace().child("junit.xml").copyFrom(
                     this.getClass().getResource("junit.xml"));
@@ -551,7 +554,8 @@ public class BuildFailureScannerHudsonTest {
 
         project.getBuildersList().add(new PrintToLogBuilder(BUILD_LOG));
         project.getBuildersList().add(new TestBuilder() {
-            public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
+            @Override
+			public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
                     BuildListener listener) throws InterruptedException, IOException {
                 build.getWorkspace().child("junit.xml").copyFrom(
                     this.getClass().getResource("junit.xml"));
@@ -588,7 +592,8 @@ public class BuildFailureScannerHudsonTest {
 
         project.getBuildersList().add(new PrintToLogBuilder(BUILD_LOG));
         project.getBuildersList().add(new TestBuilder() {
-            public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
+            @Override
+			public boolean perform(AbstractBuild<?, ?> build, Launcher launcher,
                     BuildListener listener) throws InterruptedException, IOException {
                 build.getWorkspace().child("junit.xml").copyFrom(
                     this.getClass().getResource("junit.xml"));

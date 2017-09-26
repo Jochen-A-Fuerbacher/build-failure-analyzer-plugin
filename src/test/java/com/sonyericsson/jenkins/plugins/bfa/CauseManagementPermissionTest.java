@@ -1,21 +1,25 @@
 package com.sonyericsson.jenkins.plugins.bfa;
 
-import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
-import com.gargoylesoftware.htmlunit.html.HtmlPage;
-import hudson.model.Hudson;
-import hudson.security.GlobalMatrixAuthorizationStrategy;
-import hudson.security.SecurityRealm;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+
+import java.util.List;
+
+import javax.servlet.http.HttpServletResponse;
+
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.jvnet.hudson.test.JenkinsRule;
 
-import javax.servlet.http.HttpServletResponse;
+import com.gargoylesoftware.htmlunit.FailingHttpStatusCodeException;
+import com.gargoylesoftware.htmlunit.html.HtmlPage;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
+import hudson.model.Hudson;
+import hudson.security.GlobalMatrixAuthorizationStrategy;
+import hudson.security.SecurityRealm;
 
 /**
  * Tests the permissions for the Cause Management.
@@ -84,9 +88,18 @@ public class CauseManagementPermissionTest {
         // Gets to the Failure Cause page
         HtmlPage page = webClient.goTo("failure-cause-management");
         // Checks we are actually on the page
-        assertNotNull(page.selectSingleNode("//h1[.='List of Failure Causes']"));
+        assertNotNull(getFirstByXPath(page,"//h1[.='List of Failure Causes']"));
         // Checks the "Create New" button is NOT available
-        assertNull(page.selectSingleNode("//a[.='Create new']"));
+        assertNull(getFirstByXPath(page,"//a[.='Create new']"));
+    }
+
+    @SuppressWarnings("unchecked")
+    public <X> X getFirstByXPath(HtmlPage page, String xpathExpr) {
+        List< ? > results = page.getByXPath(xpathExpr);
+        if (results.isEmpty()) {
+            return null;
+        }
+        return (X) results.get(0);
     }
 
     /**
@@ -104,9 +117,9 @@ public class CauseManagementPermissionTest {
         // Gets to the Failure Cause page
         HtmlPage page = webClient.goTo("failure-cause-management");
         // Checks we are actually on the page
-        assertNotNull(page.selectSingleNode("//h1[.='Update Failure Causes']"));
+        assertNotNull(getFirstByXPath(page,"//h1[.='Update Failure Causes']"));
         // Checks the "Create New" button is available
-        assertNotNull(page.selectSingleNode("//a[.='Create new']"));
+        assertNotNull(getFirstByXPath(page,"//a[.='Create new']"));
     }
 
     /**
@@ -124,8 +137,8 @@ public class CauseManagementPermissionTest {
         // Gets to the Failure Cause page
         HtmlPage page = webClient.goTo("failure-cause-management");
         // Checks we are actually on the page
-        assertNotNull(page.selectSingleNode("//h1[.='Update Failure Causes']"));
+        assertNotNull(getFirstByXPath(page,"//h1[.='Update Failure Causes']"));
         // Checks the "Create New" button is available
-        assertNotNull(page.selectSingleNode("//a[.='Create new']"));
+        assertNotNull(getFirstByXPath(page,"//a[.='Create new']"));
     }
 }

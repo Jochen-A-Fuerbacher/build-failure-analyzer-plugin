@@ -26,18 +26,20 @@ package com.sonyericsson.jenkins.plugins.bfa.model;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-import hudson.model.FreeStyleBuild;
-import hudson.model.Result;
-import hudson.model.FreeStyleProject;
+import java.util.List;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.jvnet.hudson.test.FailureBuilder;
 import org.jvnet.hudson.test.JenkinsRule;
 import org.jvnet.hudson.test.JenkinsRule.WebClient;
-import org.jvnet.hudson.test.FailureBuilder;
 import org.jvnet.hudson.test.recipes.LocalData;
 
 import com.gargoylesoftware.htmlunit.html.HtmlPage;
+
+import hudson.model.FreeStyleBuild;
+import hudson.model.FreeStyleProject;
+import hudson.model.Result;
 
 /**
  * Tests for {@link FailureCauseColumn}.
@@ -72,8 +74,17 @@ public class FailureCauseColumnTest {
     WebClient webClient = j.createWebClient();
     HtmlPage page = webClient.goTo("view/columnwithouttext");
     assertNotNull("Couldn't find the failure cause image in columnwithouttext view",
-            page.selectSingleNode("//img[@Title='Failure Builder']"));
-    assertNull(page.selectSingleNode("//*[.='Failure Builder']"));
+    		getFirstByXPath(page,"//img[@Title='Failure Builder']"));
+    assertNull(getFirstByXPath(page,"//*[.='Failure Builder']"));
+  }
+
+  @SuppressWarnings("unchecked")
+  public <X> X getFirstByXPath(HtmlPage page, String xpathExpr) {
+      List< ? > results = page.getByXPath(xpathExpr);
+      if (results.isEmpty()) {
+          return null;
+      }
+      return (X) results.get(0);
   }
 
   /**
@@ -95,8 +106,8 @@ public class FailureCauseColumnTest {
     WebClient webClient = j.createWebClient();
     HtmlPage page = webClient.goTo("view/columnwithtext");
     assertNotNull("Couldn't find the failure cause image in columnwithtext view",
-        page.selectSingleNode("//img[@Title='Failure Builder']"));
-    assertNotNull(page.selectSingleNode("//*[.='Failure Builder']"));
+    		getFirstByXPath(page,"//img[@Title='Failure Builder']"));
+    assertNotNull(getFirstByXPath(page,"//*[.='Failure Builder']"));
   }
 
 }
