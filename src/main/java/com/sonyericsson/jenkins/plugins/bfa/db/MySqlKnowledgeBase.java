@@ -581,13 +581,10 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 		// build result list with FailureCauses and counts
 		final List<ObjectCountPair<FailureCause>> list = new ArrayList<ObjectCountPair<FailureCause>>(fcsPerId.size());
 		for (final ObjectCountPair<String> t : fcsPerId) {
-			String id = t.getObject();
-			FailureCause fc = fcs.get(id);
-			if (fc == null) {
-				throw new NullPointerException(
-						"Error matching id " + id + ". FailureCause Id wasn't found in FailureCauses.");
+			FailureCause fc = fcs.get(t.getObject());
+			if (fc != null) {
+				list.add(new ObjectCountPair<FailureCause>(fc, t.getCount()));
 			}
-			list.add(new ObjectCountPair<FailureCause>(fc, t.getCount()));
 		}
 		return list;
 	}
