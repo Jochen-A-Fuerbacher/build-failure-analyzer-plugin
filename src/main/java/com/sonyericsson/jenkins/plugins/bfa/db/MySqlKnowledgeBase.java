@@ -211,7 +211,8 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 				final CriteriaQuery<String> cquery = c.createQuery(String.class);
 				final Root<FailureCause> f = cquery.from(FailureCause.class);
 				final TypedQuery<String> query = manager
-						.createQuery(cquery.select(f.join(FailureCause_.categories)).distinct(true));
+						.createQuery(cquery.select(f.join(FailureCause_.categories))
+								.where(c.isFalse(f.get(FailureCause_.deleted))).distinct(true));
 				final List<String> result = query.getResultList();
 				endTransaction(manager);
 				return result;
@@ -269,10 +270,12 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 
 	private List<FailureCause> getCauses(boolean loadLazyCollections) {
 		final EntityManager manager = beginTransaction();
-		final CriteriaQuery<FailureCause> query = manager.getCriteriaBuilder().createQuery(FailureCause.class);
+		CriteriaBuilder cb = manager.getCriteriaBuilder();
+		final CriteriaQuery<FailureCause> query = cb.createQuery(FailureCause.class);
 
 		final Root<FailureCause> r = query.from(FailureCause.class);
-		final List<FailureCause> causes = manager.createQuery(query.select(r)).getResultList();
+		final List<FailureCause> causes = manager
+				.createQuery(query.select(r).where(cb.isFalse(r.get(FailureCause_.deleted)))).getResultList();
 		final List<FailureCause> result;
 		if (loadLazyCollections) {
 			for (final FailureCause f : causes) {
@@ -360,9 +363,8 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 					"Cannot remove failure cause with id " + id);
 			return null;
 		}
-		final EntityManager manager = beginTransaction();
-		manager.remove(manager.contains(cause) ? cause : manager.merge(cause));
-		endTransaction(manager);
+		cause.setDeleted(true);
+		mergeCause(cause);
 		logger.info("Removed failure cause '" + cause.getName() + "' with id " + cause.getId());
 		updateCache();
 		return cause;
@@ -393,7 +395,7 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 				} else {
 					// if not found, add a new.
 					cause.setId(null);
-					//unset ids for hibernate
+					// unset ids for hibernate
 					final List<FailureCauseModification> mods = new ArrayList<FailureCauseModification>();
 					for (final FailureCauseModification m : cause.getModifications()) {
 						mods.add(new FailureCauseModification(m.getUser(), m.getTime()));
@@ -579,7 +581,13 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 		// build result list with FailureCauses and counts
 		final List<ObjectCountPair<FailureCause>> list = new ArrayList<ObjectCountPair<FailureCause>>(fcsPerId.size());
 		for (final ObjectCountPair<String> t : fcsPerId) {
-			list.add(new ObjectCountPair<FailureCause>(fcs.get(t.getObject()), t.getCount()));
+			String id = t.getObject();
+			FailureCause fc = fcs.get(id);
+			if (fc == null) {
+				throw new NullPointerException(
+						"Error matching id " + id + ". FailureCause Id wasn't found in FailureCauses.");
+			}
+			list.add(new ObjectCountPair<FailureCause>(fc, t.getCount()));
 		}
 		return list;
 	}
@@ -671,11 +679,13 @@ public class MySqlKnowledgeBase extends CachedKnowledgeBase {
 		final List<ObjectCountPair<FailureCause>> fcs = getNbrOfFailureCauses(filter, limit);
 		final Map<String, ObjectCountPair<String>> counts = new HashMap<String, ObjectCountPair<String>>();
 		for (final ObjectCountPair<FailureCause> fc : fcs) {
-			for (final String c : fc.getObject().getCategories()) {
-				if (!counts.containsKey(c)) {
-					counts.put(c, new ObjectCountPair<String>(c, 0));
+			if (fc.getObject().getCategories() != null) {
+				for (final String c : fc.getObject().getCategories()) {
+					if (!counts.containsKey(c)) {
+						counts.put(c, new ObjectCountPair<String>(c, 0));
+					}
+					counts.get(c).addCount(fc.getCount());
 				}
-				counts.get(c).addCount(fc.getCount());
 			}
 		}
 		final List<ObjectCountPair<String>> result = new ArrayList<ObjectCountPair<String>>(counts.values());

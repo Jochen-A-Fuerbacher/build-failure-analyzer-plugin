@@ -104,6 +104,8 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
 	@OneToMany(cascade = CascadeType.ALL)
 	@Column(name = "MODIFICATIONS")
 	private List<FailureCauseModification> modifications;
+	@Column(name="DELETED")
+	private Boolean deleted = false;
 
 	/**
 	 * Standard data bound constructor.
@@ -628,6 +630,13 @@ public class FailureCause implements Serializable, Action, Describable<FailureCa
 			indications = new LinkedList<Indication>();
 		}
 		return indications;
+	}
+
+	/**
+	 * @param deleted the deleted to set
+	 */
+	public void setDeleted(boolean deleted) {
+		this.deleted = deleted;
 	}
 
 	// CS IGNORE JavadocMethod FOR NEXT 8 LINES. REASON: The exception can be thrown.
