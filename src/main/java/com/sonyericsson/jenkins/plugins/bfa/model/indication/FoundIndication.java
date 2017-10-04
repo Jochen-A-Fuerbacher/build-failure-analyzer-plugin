@@ -35,6 +35,7 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import javax.persistence.Lob;
 import javax.persistence.Transient;
 
 import org.codehaus.jackson.annotate.JsonCreator;
@@ -75,6 +76,7 @@ public class FoundIndication {
     private String pattern;
     @Transient
     private Run build;
+    @Lob
     @Column(name="MATCHINGSTRING")
     private String matchingString;
 
